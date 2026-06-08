@@ -14,38 +14,52 @@
       <el-button type="primary" @click="handleSearch">搜索</el-button>
       <el-button @click="handleReset">重置</el-button>
       <el-button type="warning" @click="handleCheckReminders">检查到期</el-button>
+      <el-button type="success" @click="handleSendAll">一键通知全部</el-button>
     </div>
 
     <el-table :data="tableData" border stripe style="width: 100%">
-      <el-table-column prop="orderId" label="订单ID" min-width="100" />
-      <el-table-column prop="customerId" label="客户ID" min-width="100" />
-      <el-table-column prop="expireDate" label="到期日期" min-width="120" />
-      <el-table-column prop="daysBeforeExpire" label="提前天数" min-width="100" />
-      <el-table-column prop="status" label="状态" min-width="100">
+      <el-table-column prop="orderNo" label="订单编号" min-width="150" />
+      <el-table-column prop="customerName" label="客户姓名" min-width="100" />
+      <el-table-column prop="customerPhone" label="联系电话" min-width="120" />
+      <el-table-column prop="expireDate" label="到期日期" min-width="110" />
+      <el-table-column prop="daysBeforeExpire" label="距到期天数" min-width="100">
+        <template #default="{ row }">
+          <span :style="{ color: row.daysBeforeExpire <= 1 ? 'red' : row.daysBeforeExpire <= 3 ? 'orange' : '', fontWeight: 'bold' }">
+            {{ row.daysBeforeExpire }}天
+          </span>
+        </template>
+      </el-table-column>
+      <el-table-column prop="status" label="状态" min-width="90">
         <template #default="{ row }">
           <el-tag :type="statusTagType(row.status)">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="notifyMethod" label="通知方式" min-width="100">
+      <el-table-column prop="notifyMethod" label="通知方式" min-width="90">
         <template #default="{ row }">
           {{ notifyMethodLabel(row.notifyMethod) }}
         </template>
       </el-table-column>
       <el-table-column prop="notifyTime" label="通知时间" min-width="160" />
-      <el-table-column label="操作" width="150" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button
             v-if="row.status === 'PENDING'"
             type="success"
             link
-            @click="handleUpdateStatus(row.id, 'SENT')"
-          >SENT</el-button>
+            @click="handleSendNotify(row.id)"
+          >通知</el-button>
           <el-button
-            v-if="row.status === 'PENDING' || row.status === 'SENT'"
+            v-if="row.status === 'PENDING'"
             type="info"
             link
             @click="handleUpdateStatus(row.id, 'IGNORED')"
-          >IGNORE</el-button>
+          >忽略</el-button>
+          <el-button
+            v-if="row.status === 'SENT'"
+            type="info"
+            link
+            @click="handleUpdateStatus(row.id, 'IGNORED')"
+          >忽略</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -65,8 +79,8 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { getReminderList, checkReminders, updateReminderStatus } from '../api/reminder.js'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getReminderList, checkReminders, updateReminderStatus, sendNotify, sendAllPending } from '../api/reminder.js'
 
 const searchStatus = ref('')
 const tableData = ref([])
@@ -115,7 +129,20 @@ const handleReset = () => {
 
 const handleCheckReminders = async () => {
   await checkReminders()
-  ElMessage.success('检查完成')
+  ElMessage.success('到期检查完成')
+  fetchList()
+}
+
+const handleSendNotify = async (id) => {
+  await sendNotify(id)
+  ElMessage.success('通知已发送')
+  fetchList()
+}
+
+const handleSendAll = async () => {
+  await ElMessageBox.confirm('确认发送所有待通知的提醒？', '批量通知', { type: 'warning' })
+  const { data } = await sendAllPending()
+  ElMessage.success(`已发送${data}条通知`)
   fetchList()
 }
 
