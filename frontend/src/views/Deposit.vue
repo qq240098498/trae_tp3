@@ -214,7 +214,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getDepositList, addDeposit } from '../api/deposit.js'
+import { getDepositList, getAvailableDeposit, collectDeposit, refundDeposit, deductDeposit } from '../api/deposit.js'
 import { getOrderList } from '../api/order.js'
 
 const searchForm = reactive({
@@ -320,18 +320,13 @@ const calculateSummary = () => {
   summary.totalDeducted = deducted.toFixed(2)
 }
 
-const getAvailableDeposit = (orderId) => {
-  let collected = 0
-  let refunded = 0
-  let deducted = 0
-  allDepositRecords.value.forEach(r => {
-    if (r.orderId === orderId && (r.status === 'PAID' || r.status === 'COMPLETED')) {
-      if (r.type === 'COLLECT') collected += Number(r.amount) || 0
-      else if (r.type === 'REFUND') refunded += Number(r.amount) || 0
-      else if (r.type === 'DEDUCT') deducted += Number(r.amount) || 0
-    }
-  })
-  return collected - refunded - deducted
+const getAvailableDeposit = async (orderId) => {
+  try {
+    const { data } = await getAvailableDeposit(orderId)
+    return Number(data) || 0
+  } catch {
+    return 0
+  }
 }
 
 const fetchList = async () => {
@@ -393,12 +388,10 @@ const resetCollectForm = () => {
 const handleCollectSubmit = async () => {
   const valid = await collectFormRef.value.validate().catch(() => false)
   if (!valid) return
-  await addDeposit({
+  await collectDeposit({
     orderId: collectForm.orderId,
-    type: 'COLLECT',
     amount: collectForm.amount,
     payMethod: collectForm.payMethod,
-    status: 'PAID',
     remark: collectForm.remark
   })
   ElMessage.success('押金收取成功')
@@ -422,8 +415,8 @@ const resetRefundForm = () => {
   refundFormRef.value?.resetFields()
 }
 
-const onRefundOrderChange = (val) => {
-  refundForm.availableAmount = getAvailableDeposit(val)
+const onRefundOrderChange = async (val) => {
+  refundForm.availableAmount = await getAvailableDeposit(val)
   refundForm.amount = refundForm.availableAmount
 }
 
@@ -434,12 +427,10 @@ const handleRefundSubmit = async () => {
     ElMessage.warning('退还金额不能超过可退金额')
     return
   }
-  await addDeposit({
+  await refundDeposit({
     orderId: refundForm.orderId,
-    type: 'REFUND',
     amount: refundForm.amount,
     payMethod: refundForm.payMethod,
-    status: 'PAID',
     remark: refundForm.remark
   })
   ElMessage.success('押金退还成功')
@@ -462,8 +453,8 @@ const resetDeductForm = () => {
   deductFormRef.value?.resetFields()
 }
 
-const onDeductOrderChange = (val) => {
-  deductForm.availableAmount = getAvailableDeposit(val)
+const onDeductOrderChange = async (val) => {
+  deductForm.availableAmount = await getAvailableDeposit(val)
 }
 
 const handleDeductSubmit = async () => {
@@ -473,11 +464,9 @@ const handleDeductSubmit = async () => {
     ElMessage.warning('扣除金额不能超过可扣余额')
     return
   }
-  await addDeposit({
+  await deductDeposit({
     orderId: deductForm.orderId,
-    type: 'DEDUCT',
     amount: deductForm.amount,
-    status: 'PAID',
     remark: deductForm.remark
   })
   ElMessage.success('押金扣除成功')

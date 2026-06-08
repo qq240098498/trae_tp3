@@ -5,7 +5,6 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.instrument.rental.dto.RenewalDTO;
 import com.instrument.rental.dto.RentalOrderDTO;
 import com.instrument.rental.dto.ReturnDTO;
-import com.instrument.rental.entity.DepositRecord;
 import com.instrument.rental.entity.Instrument;
 import com.instrument.rental.entity.Reminder;
 import com.instrument.rental.entity.RenewalRecord;
@@ -70,13 +69,7 @@ public class RentalOrderServiceImpl extends ServiceImpl<RentalOrderMapper, Renta
         order.setRemark(dto.getRemark());
         this.save(order);
 
-        DepositRecord depositRecord = new DepositRecord();
-        depositRecord.setOrderId(order.getId());
-        depositRecord.setType("COLLECT");
-        depositRecord.setAmount(instrument.getDepositAmount());
-        depositRecord.setPayMethod(dto.getPayMethod());
-        depositRecord.setStatus("PAID");
-        depositRecordService.save(depositRecord);
+        depositRecordService.collectDeposit(order.getId(), instrument.getDepositAmount(), dto.getPayMethod(), null);
 
         instrument.setStatus("RENTED");
         instrumentService.updateById(instrument);
@@ -138,24 +131,13 @@ public class RentalOrderServiceImpl extends ServiceImpl<RentalOrderMapper, Renta
         }
 
         if (dto.getDeductAmount() != null && dto.getDeductAmount().compareTo(BigDecimal.ZERO) > 0) {
-            DepositRecord deductRecord = new DepositRecord();
-            deductRecord.setOrderId(order.getId());
-            deductRecord.setType("DEDUCT");
-            deductRecord.setAmount(dto.getDeductAmount());
-            deductRecord.setStatus("PAID");
-            depositRecordService.save(deductRecord);
+            depositRecordService.deductDeposit(order.getId(), dto.getDeductAmount(), "归还时扣除押金");
         }
 
         BigDecimal deducted = dto.getDeductAmount() != null ? dto.getDeductAmount() : BigDecimal.ZERO;
         BigDecimal refundAmount = order.getDepositAmount().subtract(deducted);
         if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
-            DepositRecord refundRecord = new DepositRecord();
-            refundRecord.setOrderId(order.getId());
-            refundRecord.setType("REFUND");
-            refundRecord.setAmount(refundAmount);
-            refundRecord.setPayMethod(dto.getRefundMethod());
-            refundRecord.setStatus("PAID");
-            depositRecordService.save(refundRecord);
+            depositRecordService.refundDeposit(order.getId(), refundAmount, dto.getRefundMethod(), null);
         }
 
         Instrument instrument = instrumentService.getById(order.getInstrumentId());

@@ -5,11 +5,11 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.instrument.rental.common.PageQuery;
 import com.instrument.rental.common.Result;
 import com.instrument.rental.entity.DepositRecord;
-import com.instrument.rental.entity.RentalOrder;
 import com.instrument.rental.service.DepositRecordService;
-import com.instrument.rental.service.RentalOrderService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+
+import java.math.BigDecimal;
 
 @RestController
 @RequestMapping("/api/deposit")
@@ -17,9 +17,6 @@ public class DepositRecordController {
 
     @Autowired
     private DepositRecordService depositRecordService;
-
-    @Autowired
-    private RentalOrderService rentalOrderService;
 
     @GetMapping("/list")
     public Result<Page<DepositRecord>> list(PageQuery pageQuery,
@@ -44,9 +41,41 @@ public class DepositRecordController {
         return Result.ok(page);
     }
 
-    @PostMapping
-    public Result<Void> create(@RequestBody DepositRecord depositRecord) {
-        depositRecordService.save(depositRecord);
+    @GetMapping("/available")
+    public Result<BigDecimal> available(@RequestParam Long orderId) {
+        BigDecimal available = depositRecordService.getAvailableDeposit(orderId);
+        return Result.ok(available);
+    }
+
+    @PostMapping("/collect")
+    public Result<Void> collect(@RequestBody DepositRecord depositRecord) {
+        depositRecordService.collectDeposit(
+                depositRecord.getOrderId(),
+                depositRecord.getAmount(),
+                depositRecord.getPayMethod(),
+                depositRecord.getRemark()
+        );
+        return Result.ok();
+    }
+
+    @PostMapping("/refund")
+    public Result<Void> refund(@RequestBody DepositRecord depositRecord) {
+        depositRecordService.refundDeposit(
+                depositRecord.getOrderId(),
+                depositRecord.getAmount(),
+                depositRecord.getPayMethod(),
+                depositRecord.getRemark()
+        );
+        return Result.ok();
+    }
+
+    @PostMapping("/deduct")
+    public Result<Void> deduct(@RequestBody DepositRecord depositRecord) {
+        depositRecordService.deductDeposit(
+                depositRecord.getOrderId(),
+                depositRecord.getAmount(),
+                depositRecord.getRemark()
+        );
         return Result.ok();
     }
 }

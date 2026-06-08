@@ -5,7 +5,6 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.instrument.rental.common.PageQuery;
 import com.instrument.rental.common.Result;
 import com.instrument.rental.entity.DamageRegistration;
-import com.instrument.rental.entity.DepositRecord;
 import com.instrument.rental.entity.Instrument;
 import com.instrument.rental.entity.MaintenanceRecord;
 import com.instrument.rental.entity.RepairOrder;
@@ -182,14 +181,7 @@ public class RepairOrderController {
                 damageRegistrationService.updateById(damage);
 
                 if (deductDeposit && damage.getOrderId() != null) {
-                    BigDecimal deductAmount = actualCost;
-                    DepositRecord deductRecord = new DepositRecord();
-                    deductRecord.setOrderId(damage.getOrderId());
-                    deductRecord.setType("DEDUCT");
-                    deductRecord.setAmount(deductAmount);
-                    deductRecord.setStatus("PAID");
-                    deductRecord.setRemark("维修工单[" + repair.getOrderNo() + "]扣款");
-                    depositRecordService.save(deductRecord);
+                    depositRecordService.deductDeposit(damage.getOrderId(), actualCost, "维修工单[" + repair.getOrderNo() + "]扣款");
                 }
             }
         }
