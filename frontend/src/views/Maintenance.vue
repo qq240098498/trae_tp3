@@ -50,7 +50,7 @@
       <el-table-column prop="description" label="描述" min-width="160" show-overflow-tooltip />
       <el-table-column prop="cost" label="费用" min-width="100">
         <template #default="{ row }">
-          ¥{{ row.cost?.toFixed(2) ?? '0.00' }}
+          ¥{{ row.cost || '0.00' }}
         </template>
       </el-table-column>
       <el-table-column prop="maintenanceDate" label="维保日期" min-width="120" />
@@ -117,7 +117,7 @@
           <el-input v-model="form.description" type="textarea" :rows="3" :disabled="isEdit" />
         </el-form-item>
         <el-form-item label="费用" prop="cost">
-          <el-input-number v-model="form.cost" :min="0" :precision="2" :disabled="isEdit" style="width: 100%" />
+          <el-input v-model="form.cost" placeholder="请输入费用" :disabled="isEdit" style="width: 100%" />
         </el-form-item>
         <el-form-item label="维保日期" prop="maintenanceDate">
           <el-date-picker
@@ -178,7 +178,7 @@ const form = reactive({
   instrumentId: null,
   type: '',
   description: '',
-  cost: null,
+  cost: '',
   maintenanceDate: '',
   status: 'PENDING',
   remark: ''
@@ -264,7 +264,7 @@ const resetForm = () => {
     instrumentId: null,
     type: '',
     description: '',
-    cost: null,
+    cost: '',
     maintenanceDate: '',
     status: 'PENDING',
     remark: ''

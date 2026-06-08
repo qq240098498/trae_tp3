@@ -2,6 +2,7 @@ package com.instrument.rental.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -13,7 +14,7 @@ public class MaintenanceRecord {
     private String type;
     private String description;
     private String cost;
-    private LocalDateTime maintenanceDate;
+    private LocalDate maintenanceDate;
     private String status;
     private String remark;
     @TableField(fill = FieldFill.INSERT)
