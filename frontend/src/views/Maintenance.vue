@@ -41,7 +41,7 @@
     </div>
 
     <el-table :data="tableData" border stripe style="width: 100%">
-      <el-table-column prop="instrumentId" label="乐器ID" min-width="80" />
+      <el-table-column prop="instrumentName" label="乐器" min-width="120" />
       <el-table-column prop="type" label="维保类型" min-width="100">
         <template #default="{ row }">
           <el-tag>{{ row.type }}</el-tag>
@@ -57,6 +57,12 @@
       <el-table-column prop="status" label="状态" min-width="90">
         <template #default="{ row }">
           <el-tag :type="statusTagType(row.status)">{{ statusLabel(row.status) }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="repairOrderNo" label="关联工单" min-width="140">
+        <template #default="{ row }">
+          <el-tag v-if="row.repairOrderNo" type="warning">{{ row.repairOrderNo }}</el-tag>
+          <span v-else style="color: #999">-</span>
         </template>
       </el-table-column>
       <el-table-column prop="remark" label="备注" min-width="140" show-overflow-tooltip />

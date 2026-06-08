@@ -9,8 +9,10 @@
         <el-menu-item index="/instrument"><el-icon><Collection /></el-icon><span>乐器档案</span></el-menu-item>
         <el-menu-item index="/customer"><el-icon><User /></el-icon><span>客户档案</span></el-menu-item>
         <el-menu-item index="/order"><el-icon><Document /></el-icon><span>租赁管理</span></el-menu-item>
+        <el-menu-item index="/damage"><el-icon><Warning /></el-icon><span>损坏登记</span></el-menu-item>
+        <el-menu-item index="/repair"><el-icon><SetUp /></el-icon><span>维修工单</span></el-menu-item>
         <el-menu-item index="/deposit"><el-icon><Wallet /></el-icon><span>押金管理</span></el-menu-item>
-        <el-menu-item index="/maintenance"><el-icon><SetUp /></el-icon><span>维保管理</span></el-menu-item>
+        <el-menu-item index="/maintenance"><el-icon><SetUp /></el-icon><span>维保记录</span></el-menu-item>
         <el-menu-item index="/reminder"><el-icon><Bell /></el-icon><span>到期提醒</span></el-menu-item>
       </el-menu>
     </el-aside>

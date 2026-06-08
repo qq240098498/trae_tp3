@@ -98,3 +98,37 @@ CREATE TABLE IF NOT EXISTS reminder (
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     deleted INT DEFAULT 0
 ) COMMENT '到期提醒表';
+
+CREATE TABLE IF NOT EXISTS damage_registration (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT COMMENT '关联订单ID',
+    instrument_id BIGINT NOT NULL COMMENT '乐器ID',
+    customer_id BIGINT COMMENT '客户ID',
+    damage_type VARCHAR(30) NOT NULL COMMENT '损坏类型(外观损坏/功能故障/配件丢失/音质异常/其他)',
+    description VARCHAR(500) COMMENT '损坏描述',
+    severity VARCHAR(20) NOT NULL COMMENT '严重程度(MINOR/MODERATE/SEVERE)',
+    estimated_cost DECIMAL(10,2) DEFAULT 0 COMMENT '预估维修费用',
+    status VARCHAR(20) DEFAULT 'REPORTED' COMMENT '状态(REPORTED/REPAIR_CREATED/REPAIRED)',
+    remark VARCHAR(500) COMMENT '备注',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted INT DEFAULT 0
+) COMMENT '损坏登记表';
+
+CREATE TABLE IF NOT EXISTS repair_order (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_no VARCHAR(30) NOT NULL UNIQUE COMMENT '工单编号',
+    damage_id BIGINT COMMENT '关联损坏登记ID',
+    instrument_id BIGINT NOT NULL COMMENT '乐器ID',
+    repair_type VARCHAR(30) NOT NULL COMMENT '维修类型(外观修复/功能维修/配件更换/调音校正/其他)',
+    description VARCHAR(500) COMMENT '维修描述',
+    estimated_cost DECIMAL(10,2) DEFAULT 0 COMMENT '预估费用',
+    actual_cost DECIMAL(10,2) COMMENT '实际费用',
+    assignee VARCHAR(50) COMMENT '负责人',
+    status VARCHAR(20) DEFAULT 'PENDING' COMMENT '状态(PENDING/IN_PROGRESS/COMPLETED)',
+    maintenance_record_id BIGINT COMMENT '关联维保记录ID',
+    remark VARCHAR(500) COMMENT '备注',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted INT DEFAULT 0
+) COMMENT '维修工单表';

@@ -11,4 +11,7 @@ public class DashboardVO {
     private long activeOrders;
     private long overdueOrders;
     private long pendingReminders;
+    private long pendingDamages;
+    private long pendingRepairs;
+    private long maintenanceInstruments;
 }

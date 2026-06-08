@@ -4,12 +4,16 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.instrument.rental.dto.DashboardVO;
 import com.instrument.rental.entity.Customer;
+import com.instrument.rental.entity.DamageRegistration;
 import com.instrument.rental.entity.Instrument;
+import com.instrument.rental.entity.RepairOrder;
 import com.instrument.rental.entity.RentalOrder;
 import com.instrument.rental.entity.Reminder;
 import com.instrument.rental.mapper.ReminderMapper;
 import com.instrument.rental.service.CustomerService;
+import com.instrument.rental.service.DamageRegistrationService;
 import com.instrument.rental.service.InstrumentService;
+import com.instrument.rental.service.RepairOrderService;
 import com.instrument.rental.service.RentalOrderService;
 import com.instrument.rental.service.ReminderService;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +38,12 @@ public class ReminderServiceImpl extends ServiceImpl<ReminderMapper, Reminder> i
 
     @Autowired
     private RentalOrderService rentalOrderService;
+
+    @Autowired
+    private DamageRegistrationService damageRegistrationService;
+
+    @Autowired
+    private RepairOrderService repairOrderService;
 
     @Override
     @Scheduled(cron = "0 0 8 * * ?")
@@ -108,6 +118,15 @@ public class ReminderServiceImpl extends ServiceImpl<ReminderMapper, Reminder> i
         ));
         vo.setPendingReminders(this.count(
                 new LambdaQueryWrapper<Reminder>().eq(Reminder::getStatus, "PENDING")
+        ));
+        vo.setPendingDamages(damageRegistrationService.count(
+                new LambdaQueryWrapper<DamageRegistration>().eq(DamageRegistration::getStatus, "REPORTED")
+        ));
+        vo.setPendingRepairs(repairOrderService.count(
+                new LambdaQueryWrapper<RepairOrder>().in(RepairOrder::getStatus, "PENDING", "IN_PROGRESS")
+        ));
+        vo.setMaintenanceInstruments(instrumentService.count(
+                new LambdaQueryWrapper<Instrument>().eq(Instrument::getStatus, "MAINTENANCE")
         ));
 
         return vo;
