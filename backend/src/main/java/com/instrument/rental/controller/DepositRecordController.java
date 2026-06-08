@@ -24,13 +24,17 @@ public class DepositRecordController {
     @GetMapping("/list")
     public Result<Page<DepositRecord>> list(PageQuery pageQuery,
                                              @RequestParam(required = false) Long orderId,
-                                             @RequestParam(required = false) String type) {
+                                             @RequestParam(required = false) String type,
+                                             @RequestParam(required = false) String status) {
         LambdaQueryWrapper<DepositRecord> wrapper = new LambdaQueryWrapper<>();
         if (orderId != null) {
             wrapper.eq(DepositRecord::getOrderId, orderId);
         }
         if (type != null && !type.isEmpty()) {
             wrapper.eq(DepositRecord::getType, type);
+        }
+        if (status != null && !status.isEmpty()) {
+            wrapper.eq(DepositRecord::getStatus, status);
         }
         wrapper.orderByDesc(DepositRecord::getCreateTime);
         Page<DepositRecord> page = depositRecordService.page(pageQuery.toPage(), wrapper);

@@ -93,7 +93,11 @@
         </template>
       </el-table-column>
       <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="createTime" label="创建时间" min-width="160" />
+      <el-table-column prop="createTime" label="创建时间" min-width="160">
+        <template #default="{ row }">
+          {{ formatTime(row.createTime) }}
+        </template>
+      </el-table-column>
     </el-table>
 
     <el-pagination
@@ -145,9 +149,9 @@
         <el-form-item label="订单" prop="orderId">
           <el-select v-model="refundForm.orderId" placeholder="请选择订单" filterable style="width: 100%" @change="onRefundOrderChange">
             <el-option
-              v-for="item in returnedOrderOptions"
+              v-for="item in depositOrderOptions"
               :key="item.id"
-              :label="item.orderNo + ' - ' + item.instrumentName"
+              :label="item.orderNo + ' - ' + item.instrumentName + ' (' + orderStatusText(item.status) + ')'"
               :value="item.id"
             />
           </el-select>
@@ -181,9 +185,9 @@
         <el-form-item label="订单" prop="orderId">
           <el-select v-model="deductForm.orderId" placeholder="请选择订单" filterable style="width: 100%" @change="onDeductOrderChange">
             <el-option
-              v-for="item in activeOrderOptions"
+              v-for="item in depositOrderOptions"
               :key="item.id"
-              :label="item.orderNo + ' - ' + item.instrumentName"
+              :label="item.orderNo + ' - ' + item.instrumentName + ' (' + orderStatusText(item.status) + ')'"
               :value="item.id"
             />
           </el-select>
@@ -240,9 +244,21 @@ const payMethodMap = {
   BANK: '银行'
 }
 
+const formatTime = (time) => {
+  if (!time) return '-'
+  const d = new Date(time)
+  if (isNaN(d.getTime())) return time
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+const orderStatusText = (status) => {
+  const map = { ACTIVE: '租赁中', RETURNED: '已归还', OVERDUE: '逾期', CANCELLED: '已取消' }
+  return map[status] || status
+}
+
 const orderOptions = ref([])
-const activeOrderOptions = ref([])
-const returnedOrderOptions = ref([])
+const depositOrderOptions = ref([])
 
 const collectDialogVisible = ref(false)
 const collectFormRef = ref(null)
@@ -344,8 +360,7 @@ const fetchAllDeposits = async () => {
 const fetchOrders = async () => {
   const { data } = await getOrderList({ pageNum: 1, pageSize: 9999 })
   orderOptions.value = data.records
-  activeOrderOptions.value = data.records.filter(o => o.status === 'ACTIVE' || o.status === 'OVERDUE')
-  returnedOrderOptions.value = data.records.filter(o => o.status === 'RETURNED')
+  depositOrderOptions.value = data.records.filter(o => o.status !== 'CANCELLED')
 }
 
 const handleSearch = () => {
