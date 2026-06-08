@@ -1,0 +1,100 @@
+CREATE TABLE IF NOT EXISTS customer (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL COMMENT '客户姓名',
+    phone VARCHAR(20) NOT NULL COMMENT '联系电话',
+    id_card VARCHAR(18) COMMENT '身份证号',
+    address VARCHAR(200) COMMENT '地址',
+    email VARCHAR(100) COMMENT '邮箱',
+    remark VARCHAR(500) COMMENT '备注',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted INT DEFAULT 0
+) COMMENT '客户表';
+
+CREATE TABLE IF NOT EXISTS instrument (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL COMMENT '乐器名称',
+    brand VARCHAR(50) COMMENT '品牌',
+    category VARCHAR(30) COMMENT '分类(键盘/弦乐/管乐/打击/其他)',
+    model VARCHAR(50) COMMENT '型号',
+    serial_no VARCHAR(50) COMMENT '序列号',
+    purchase_price DECIMAL(10,2) COMMENT '采购价格',
+    daily_rent DECIMAL(10,2) NOT NULL COMMENT '日租金',
+    deposit_amount DECIMAL(10,2) NOT NULL COMMENT '押金金额',
+    status VARCHAR(20) DEFAULT 'AVAILABLE' COMMENT '状态(AVAILABLE/RENTED/MAINTENANCE/RETIRED)',
+    `condition` VARCHAR(20) DEFAULT 'NEW' COMMENT '成色(NEW/GOOD/FAIR/POOR)',
+    image_url VARCHAR(500) COMMENT '图片URL',
+    remark VARCHAR(500) COMMENT '备注',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted INT DEFAULT 0
+) COMMENT '乐器表';
+
+CREATE TABLE IF NOT EXISTS rental_order (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_no VARCHAR(30) NOT NULL UNIQUE COMMENT '订单编号',
+    customer_id BIGINT NOT NULL COMMENT '客户ID',
+    instrument_id BIGINT NOT NULL COMMENT '乐器ID',
+    start_date DATE NOT NULL COMMENT '租赁开始日期',
+    end_date DATE NOT NULL COMMENT '租赁结束日期',
+    daily_rent DECIMAL(10,2) NOT NULL COMMENT '日租金',
+    total_rent DECIMAL(10,2) NOT NULL COMMENT '总租金',
+    deposit_amount DECIMAL(10,2) NOT NULL COMMENT '押金金额',
+    status VARCHAR(20) DEFAULT 'ACTIVE' COMMENT '状态(ACTIVE/RETURNED/OVERDUE/CANCELLED)',
+    actual_return_date DATE COMMENT '实际归还日期',
+    overdue_fee DECIMAL(10,2) DEFAULT 0 COMMENT '逾期费用',
+    remark VARCHAR(500) COMMENT '备注',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted INT DEFAULT 0
+) COMMENT '租赁订单表';
+
+CREATE TABLE IF NOT EXISTS deposit_record (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL COMMENT '订单ID',
+    type VARCHAR(20) NOT NULL COMMENT '类型(COLLECT/REFUND/DEDUCT)',
+    amount DECIMAL(10,2) NOT NULL COMMENT '金额',
+    pay_method VARCHAR(20) COMMENT '支付方式(CASH/WECHAT/ALIPAY/BANK)',
+    status VARCHAR(20) DEFAULT 'PENDING' COMMENT '状态(PENDING/COMPLETED/CANCELLED)',
+    remark VARCHAR(500) COMMENT '备注',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted INT DEFAULT 0
+) COMMENT '押金记录表';
+
+CREATE TABLE IF NOT EXISTS renewal_record (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL COMMENT '订单ID',
+    original_end_date DATE NOT NULL COMMENT '原到期日期',
+    new_end_date DATE NOT NULL COMMENT '新到期日期',
+    additional_rent DECIMAL(10,2) NOT NULL COMMENT '追加租金',
+    remark VARCHAR(500) COMMENT '备注',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted INT DEFAULT 0
+) COMMENT '续租记录表';
+
+CREATE TABLE IF NOT EXISTS maintenance_record (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    instrument_id BIGINT NOT NULL COMMENT '乐器ID',
+    type VARCHAR(30) NOT NULL COMMENT '维保类型(日常保养/维修/调音/更换配件)',
+    description VARCHAR(500) COMMENT '描述',
+    cost VARCHAR(50) COMMENT '费用',
+    maintenance_date DATETIME NOT NULL COMMENT '维保日期',
+    status VARCHAR(20) DEFAULT 'PENDING' COMMENT '状态(PENDING/IN_PROGRESS/COMPLETED)',
+    remark VARCHAR(500) COMMENT '备注',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted INT DEFAULT 0
+) COMMENT '维保记录表';
+
+CREATE TABLE IF NOT EXISTS reminder (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL COMMENT '订单ID',
+    customer_id BIGINT NOT NULL COMMENT '客户ID',
+    expire_date DATE NOT NULL COMMENT '到期日期',
+    days_before_expire INT DEFAULT 3 COMMENT '提前几天提醒',
+    status VARCHAR(20) DEFAULT 'PENDING' COMMENT '状态(PENDING/SENT/IGNORED)',
+    notify_method VARCHAR(20) DEFAULT 'SYSTEM' COMMENT '通知方式(SYSTEM/SMS/PHONE)',
+    notify_time DATETIME COMMENT '通知时间',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted INT DEFAULT 0
+) COMMENT '到期提醒表';
