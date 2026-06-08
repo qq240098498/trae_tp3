@@ -23,12 +23,15 @@ public class DepositRecordController {
 
     @GetMapping("/list")
     public Result<Page<DepositRecord>> list(PageQuery pageQuery,
-                                             @RequestParam(required = false) Long orderId,
+                                             @RequestParam(required = false) String orderId,
                                              @RequestParam(required = false) String type,
                                              @RequestParam(required = false) String status) {
         LambdaQueryWrapper<DepositRecord> wrapper = new LambdaQueryWrapper<>();
-        if (orderId != null) {
-            wrapper.eq(DepositRecord::getOrderId, orderId);
+        if (orderId != null && !orderId.isEmpty()) {
+            try {
+                wrapper.eq(DepositRecord::getOrderId, Long.parseLong(orderId));
+            } catch (NumberFormatException ignored) {
+            }
         }
         if (type != null && !type.isEmpty()) {
             wrapper.eq(DepositRecord::getType, type);

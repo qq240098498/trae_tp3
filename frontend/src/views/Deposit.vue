@@ -6,6 +6,7 @@
         placeholder="请输入订单ID"
         clearable
         style="width: 200px"
+        @input="searchForm.orderId = searchForm.orderId.replace(/[^\d]/g, '')"
       />
       <el-select
         v-model="searchForm.type"
