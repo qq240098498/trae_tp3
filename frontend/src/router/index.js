@@ -16,6 +16,7 @@ const routes = [
       { path: 'deposit', name: 'Deposit', component: () => import('../views/Deposit.vue'), meta: { title: '押金管理' } },
       { path: 'maintenance', name: 'Maintenance', component: () => import('../views/Maintenance.vue'), meta: { title: '维保记录' } },
       { path: 'reminder', name: 'Reminder', component: () => import('../views/Reminder.vue'), meta: { title: '到期提醒' } },
+      { path: 'points', name: 'Points', component: () => import('../views/Points.vue'), meta: { title: '会员积分' } },
     ]
   }
 ]

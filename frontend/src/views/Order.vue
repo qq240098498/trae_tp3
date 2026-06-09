@@ -40,19 +40,36 @@
       <el-table-column prop="startDate" label="开始日期" min-width="110" />
       <el-table-column prop="endDate" label="结束日期" min-width="110" />
       <el-table-column prop="dailyRent" label="日租金" min-width="90">
-        <template #default="{ row }">
-          ¥{{ row.dailyRent?.toFixed(2) ?? '0.00' }}
-        </template>
+        <template #default="{ row }">¥{{ row.dailyRent?.toFixed(2) ?? '0.00' }}</template>
       </el-table-column>
       <el-table-column prop="totalRent" label="总租金" min-width="90">
+        <template #default="{ row }">¥{{ row.totalRent?.toFixed(2) ?? '0.00' }}</template>
+      </el-table-column>
+      <el-table-column prop="usedPoints" label="使用积分" min-width="90" align="right">
         <template #default="{ row }">
-          ¥{{ row.totalRent?.toFixed(2) ?? '0.00' }}
+          <span v-if="row.usedPoints > 0" style="color: #E6A23C">{{ row.usedPoints }}</span>
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
+      <el-table-column prop="pointsDeductAmount" label="积分抵扣" min-width="90" align="right">
+        <template #default="{ row }">
+          <span v-if="row.pointsDeductAmount > 0" style="color: #67C23A">-¥{{ row.pointsDeductAmount?.toFixed(2) }}</span>
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
+      <el-table-column prop="actualPayAmount" label="实付金额" min-width="100" align="right">
+        <template #default="{ row }">
+          <span style="color: #F56C6C; font-weight: 600">¥{{ row.actualPayAmount?.toFixed(2) ?? row.totalRent?.toFixed(2) ?? '0.00' }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column prop="earnedPoints" label="获得积分" min-width="90" align="right">
+        <template #default="{ row }">
+          <span v-if="row.earnedPoints > 0" style="color: #409EFF; font-weight: 600">+{{ row.earnedPoints }}</span>
+          <span v-else>-</span>
         </template>
       </el-table-column>
       <el-table-column prop="depositAmount" label="押金" min-width="90">
-        <template #default="{ row }">
-          ¥{{ row.depositAmount?.toFixed(2) ?? '0.00' }}
-        </template>
+        <template #default="{ row }">¥{{ row.depositAmount?.toFixed(2) ?? '0.00' }}</template>
       </el-table-column>
       <el-table-column prop="status" label="状态" min-width="80">
         <template #default="{ row }">
@@ -95,24 +112,34 @@
       @current-change="fetchList"
     />
 
-    <el-dialog v-model="createDialogVisible" title="新建租赁" width="600px" @close="resetCreateForm">
+    <el-dialog v-model="createDialogVisible" title="新建租赁" width="650px" @close="resetCreateForm">
       <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="100px">
         <el-form-item label="客户" prop="customerId">
-          <el-select v-model="createForm.customerId" placeholder="请选择客户" style="width: 100%">
+          <el-select v-model="createForm.customerId" placeholder="请选择客户" style="width: 100%" @change="onCustomerChange">
             <el-option
               v-for="c in customerOptions"
               :key="c.id"
-              :label="c.name"
+              :label="c.name + ' (' + c.phone + ')'"
               :value="c.id"
             />
           </el-select>
+        </el-form-item>
+        <el-form-item v-if="currentCustomerPoints !== null" label="可用积分">
+          <div style="display: flex; align-items: center; gap: 12px">
+            <el-tag type="success" effect="dark" size="large">
+              <span style="font-size: 16px; font-weight: 600">{{ currentCustomerPoints }}</span> 积分
+            </el-tag>
+            <span v-if="currentCustomerPoints > 0" style="color: #909399; font-size: 13px">
+              可抵扣约 ¥{{ (currentCustomerPoints / deductRate).toFixed(2) }}
+            </span>
+          </div>
         </el-form-item>
         <el-form-item label="乐器" prop="instrumentId">
           <el-select v-model="createForm.instrumentId" placeholder="请选择乐器" style="width: 100%" @change="onInstrumentChange">
             <el-option
               v-for="i in instrumentOptions"
               :key="i.id"
-              :label="i.name"
+              :label="i.name + ' (日租¥' + i.dailyRent + ')'"
               :value="i.id"
             />
           </el-select>
@@ -126,11 +153,57 @@
             end-placeholder="结束日期"
             value-format="YYYY-MM-DD"
             style="width: 100%"
+            @change="onDateChange"
           />
         </el-form-item>
-        <el-form-item v-if="calculatedTotalRent > 0" label="总租金">
-          ¥{{ calculatedTotalRent.toFixed(2) }}
+        <el-form-item label="使用积分抵扣">
+          <el-switch
+            v-model="createForm.usePoints"
+            :disabled="!canUsePoints"
+            active-text="使用积分"
+            inactive-text="不使用"
+            @change="onUsePointsChange"
+          />
         </el-form-item>
+        <el-form-item v-if="createForm.usePoints && canUsePoints" label="抵扣积分">
+          <div style="width: 100%">
+            <el-slider
+              v-model="createForm.usePointsAmount"
+              :min="minPointsSlider"
+              :max="maxPointsSlider"
+              :step="pointsSliderStep"
+              :marks="sliderMarks"
+              show-input
+              @input="calculatePointsInfo"
+              style="margin-top: 8px"
+            />
+            <div style="color: #909399; font-size: 12px; margin-top: 6px">
+              最高可抵扣 {{ maxPointsSlider }} 积分 = ¥{{ maxDeductAmount.toFixed(2) }}
+              （订单金额 {{ maxDeductPercent }}% 上限）
+            </div>
+          </div>
+        </el-form-item>
+
+        <el-divider content-position="left">费用明细</el-divider>
+        <div class="fee-detail">
+          <div class="fee-row">
+            <span class="fee-label">总租金</span>
+            <span class="fee-value">¥{{ pointsInfo.totalRent?.toFixed(2) || '0.00' }}</span>
+          </div>
+          <div v-if="pointsInfo.deductAmount > 0" class="fee-row">
+            <span class="fee-label">积分抵扣（{{ pointsInfo.usePoints }} 积分）</span>
+            <span class="fee-value deduct">-¥{{ pointsInfo.deductAmount?.toFixed(2) }}</span>
+          </div>
+          <div class="fee-row total">
+            <span class="fee-label">实付金额</span>
+            <span class="fee-value">¥{{ pointsInfo.actualPayAmount?.toFixed(2) || '0.00' }}</span>
+          </div>
+          <div v-if="pointsInfo.willEarnPoints > 0" class="fee-row earn">
+            <span class="fee-label">🎉 本次消费预计获得</span>
+            <span class="fee-value"><el-tag type="primary" effect="dark">+{{ pointsInfo.willEarnPoints }} 积分</el-tag></span>
+          </div>
+        </div>
+
         <el-form-item label="支付方式" prop="payMethod">
           <el-select v-model="createForm.payMethod" placeholder="请选择支付方式" style="width: 100%">
             <el-option label="现金" value="CASH" />
@@ -145,21 +218,15 @@
       </el-form>
       <template #footer>
         <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleCreateSubmit">确定</el-button>
+        <el-button type="primary" @click="handleCreateSubmit">确定下单</el-button>
       </template>
     </el-dialog>
 
     <el-dialog v-model="renewDialogVisible" title="续租" width="600px" @close="resetRenewForm">
       <el-form ref="renewFormRef" :model="renewForm" :rules="renewRules" label-width="100px">
-        <el-form-item label="订单编号">
-          {{ renewForm.orderNo }}
-        </el-form-item>
-        <el-form-item label="乐器">
-          {{ renewForm.instrumentName }}
-        </el-form-item>
-        <el-form-item label="当前到期日">
-          {{ renewForm.currentEndDate }}
-        </el-form-item>
+        <el-form-item label="订单编号">{{ renewForm.orderNo }}</el-form-item>
+        <el-form-item label="乐器">{{ renewForm.instrumentName }}</el-form-item>
+        <el-form-item label="当前到期日">{{ renewForm.currentEndDate }}</el-form-item>
         <el-form-item label="新到期日" prop="newEndDate">
           <el-date-picker
             v-model="renewForm.newEndDate"
@@ -170,9 +237,7 @@
             :disabled-date="renewDisabledDate"
           />
         </el-form-item>
-        <el-form-item v-if="additionalRent > 0" label="续租费用">
-          ¥{{ additionalRent.toFixed(2) }}
-        </el-form-item>
+        <el-form-item v-if="additionalRent > 0" label="续租费用">¥{{ additionalRent.toFixed(2) }}</el-form-item>
         <el-form-item label="备注" prop="remark">
           <el-input v-model="renewForm.remark" type="textarea" :rows="3" />
         </el-form-item>
@@ -185,11 +250,13 @@
 
     <el-dialog v-model="returnDialogVisible" title="退租" width="600px" @close="resetReturnForm">
       <el-form ref="returnFormRef" :model="returnForm" :rules="returnRules" label-width="100px">
-        <el-form-item label="订单编号">
-          {{ returnForm.orderNo }}
-        </el-form-item>
-        <el-form-item label="乐器">
-          {{ returnForm.instrumentName }}
+        <el-form-item label="订单编号">{{ returnForm.orderNo }}</el-form-item>
+        <el-form-item label="乐器">{{ returnForm.instrumentName }}</el-form-item>
+        <el-form-item v-if="estimatedEarnPoints > 0" label="将获得积分">
+          <el-tag type="primary" effect="dark" size="large">
+            <span style="font-size: 15px">+{{ estimatedEarnPoints }} 积分</span>
+          </el-tag>
+          <span style="color: #909399; font-size: 13px; margin-left: 10px">归还订单后自动发放</span>
         </el-form-item>
         <el-form-item label="乐器成色" prop="instrumentCondition">
           <el-select v-model="returnForm.instrumentCondition" placeholder="请选择成色" style="width: 100%">
@@ -223,11 +290,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getOrderList, createOrder, renewOrder, returnOrder } from '../api/order.js'
+import { getOrderList, createOrder, renewOrder, returnOrder, calculateOrderPoints } from '../api/order.js'
 import { getAvailableInstruments } from '../api/instrument.js'
 import { getAllCustomers } from '../api/customer.js'
+import { getCustomerPoints, getDefaultConfigs } from '../api/points.js'
 
 const searchParams = reactive({
   keyword: '',
@@ -246,6 +314,10 @@ const selectedRow = ref(null)
 const customerOptions = ref([])
 const instrumentOptions = ref([])
 
+const deductRate = ref(100)
+const earnRate = ref(1)
+const maxDeductPercent = ref(30)
+
 const createDialogVisible = ref(false)
 const createFormRef = ref(null)
 const createForm = reactive({
@@ -253,8 +325,12 @@ const createForm = reactive({
   instrumentId: null,
   dateRange: null,
   payMethod: '',
-  remark: ''
+  remark: '',
+  usePoints: false,
+  usePointsAmount: 0
 })
+
+const currentCustomerPoints = ref(null)
 
 const createRules = {
   customerId: [{ required: true, message: '请选择客户', trigger: 'change' }],
@@ -265,12 +341,41 @@ const createRules = {
 
 const selectedInstrumentDailyRent = ref(0)
 
-const calculatedTotalRent = computed(() => {
-  if (!createForm.dateRange || !createForm.instrumentId) return 0
-  const [start, end] = createForm.dateRange
-  if (!start || !end || selectedInstrumentDailyRent.value <= 0) return 0
-  const days = Math.ceil((new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24))
-  return Math.max(days, 0) * selectedInstrumentDailyRent.value
+const pointsInfo = reactive({
+  totalRent: 0,
+  deductAmount: 0,
+  usePoints: 0,
+  actualPayAmount: 0,
+  willEarnPoints: 0,
+  maxDeductAmount: 0
+})
+
+const maxDeductAmount = computed(() => pointsInfo.maxDeductAmount || 0)
+
+const canUsePoints = computed(() => {
+  return !!(currentCustomerPoints.value && currentCustomerPoints.value > 0
+    && createForm.customerId && createForm.instrumentId
+    && createForm.dateRange && createForm.dateRange.length === 2)
+})
+
+const minPointsSlider = computed(() => Math.min(deductRate.value, (currentCustomerPoints.value || 0)))
+const maxPointsSlider = computed(() => {
+  const byPercent = (pointsInfo.maxDeductAmount || 0) * deductRate.value
+  return Math.min(Math.floor(byPercent), (currentCustomerPoints.value || 0))
+})
+
+const pointsSliderStep = computed(() => Math.max(1, Math.floor(deductRate.value / 2)))
+
+const sliderMarks = computed(() => {
+  const max = maxPointsSlider.value
+  if (max <= 0) return {}
+  const marks = {}
+  const step = Math.ceil(max / 4)
+  for (let i = 0; i <= 4; i++) {
+    const val = Math.round(i * step)
+    if (val <= max) marks[val] = val + ''
+  }
+  return marks
 })
 
 const renewDialogVisible = ref(false)
@@ -311,6 +416,8 @@ const returnForm = reactive({
   refundMethod: '',
   remark: ''
 })
+
+const estimatedEarnPoints = ref(0)
 
 const returnRules = {
   instrumentCondition: [{ required: true, message: '请选择乐器成色', trigger: 'change' }],
@@ -364,10 +471,111 @@ const loadInstruments = async () => {
   instrumentOptions.value = data
 }
 
+const loadPointsConfigs = async () => {
+  try {
+    const { data } = await getDefaultConfigs()
+    if (data) {
+      earnRate.value = Number(data.earnRate) || 1
+      deductRate.value = Number(data.deductRate) || 100
+      maxDeductPercent.value = Number(data.maxDeductPercent) || 30
+    }
+  } catch {}
+}
+
 const onInstrumentChange = (val) => {
   const inst = instrumentOptions.value.find(i => i.id === val)
   selectedInstrumentDailyRent.value = inst ? inst.dailyRent || 0 : 0
+  calculatePointsInfo()
 }
+
+const onCustomerChange = async (customerId) => {
+  currentCustomerPoints.value = null
+  createForm.usePoints = false
+  createForm.usePointsAmount = 0
+  pointsInfo.usePoints = 0
+  pointsInfo.deductAmount = 0
+  if (customerId) {
+    try {
+      const { data } = await getCustomerPoints(customerId)
+      currentCustomerPoints.value = data?.availablePoints || 0
+    } catch {
+      currentCustomerPoints.value = 0
+    }
+  }
+  calculatePointsInfo()
+}
+
+const onDateChange = () => {
+  calculatePointsInfo()
+}
+
+const onUsePointsChange = (val) => {
+  if (val && currentCustomerPoints.value > 0) {
+    createForm.usePointsAmount = Math.min(maxPointsSlider.value, currentCustomerPoints.value)
+  } else {
+    createForm.usePointsAmount = 0
+  }
+  calculatePointsInfo()
+}
+
+const calculatePointsInfo = async () => {
+  if (!createForm.customerId || !createForm.instrumentId || !createForm.dateRange || createForm.dateRange.length !== 2) {
+    pointsInfo.totalRent = 0
+    pointsInfo.deductAmount = 0
+    pointsInfo.usePoints = 0
+    pointsInfo.actualPayAmount = 0
+    pointsInfo.willEarnPoints = 0
+    pointsInfo.maxDeductAmount = 0
+    return
+  }
+  try {
+    const [startDate, endDate] = createForm.dateRange
+    const usePoints = createForm.usePoints ? createForm.usePointsAmount : 0
+    const { data } = await calculateOrderPoints({
+      customerId: createForm.customerId,
+      instrumentId: createForm.instrumentId,
+      startDate,
+      endDate,
+      usePoints: usePoints || undefined
+    })
+    if (data) {
+      pointsInfo.totalRent = Number(data.totalRent) || 0
+      pointsInfo.deductAmount = Number(data.deductAmount) || 0
+      pointsInfo.usePoints = Number(data.usePoints) || 0
+      pointsInfo.actualPayAmount = Number(data.actualPayAmount) || pointsInfo.totalRent
+      pointsInfo.willEarnPoints = Number(data.willEarnPoints) || 0
+      pointsInfo.maxDeductAmount = Number(data.maxDeductAmount) || 0
+    }
+  } catch (e) {
+    // fallback to local calculation
+    const [start, end] = createForm.dateRange
+    const days = Math.ceil((new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24))
+    const total = Math.max(days, 0) * selectedInstrumentDailyRent.value
+    pointsInfo.totalRent = total
+    const max = total * maxDeductPercent.value / 100
+    pointsInfo.maxDeductAmount = max
+    let useAmt = 0, usePts = 0
+    if (createForm.usePoints && currentCustomerPoints.value > 0) {
+      const pts = Math.min(createForm.usePointsAmount, currentCustomerPoints.value)
+      const tempAmt = pts / deductRate.value
+      if (tempAmt > max) {
+        useAmt = max
+        usePts = Math.floor(max * deductRate.value)
+      } else {
+        useAmt = tempAmt
+        usePts = pts
+      }
+    }
+    pointsInfo.usePoints = usePts
+    pointsInfo.deductAmount = Number(useAmt.toFixed(2))
+    pointsInfo.actualPayAmount = Number((total - useAmt).toFixed(2))
+    pointsInfo.willEarnPoints = Math.round(total * earnRate.value)
+  }
+}
+
+watch([() => createForm.usePoints, () => createForm.usePointsAmount], () => {
+  if (canUsePoints.value) calculatePointsInfo()
+})
 
 const openCreateDialog = () => {
   loadCustomers()
@@ -382,26 +590,46 @@ const resetCreateForm = () => {
     instrumentId: null,
     dateRange: null,
     payMethod: '',
-    remark: ''
+    remark: '',
+    usePoints: false,
+    usePointsAmount: 0
   })
   selectedInstrumentDailyRent.value = 0
+  currentCustomerPoints.value = null
+  Object.assign(pointsInfo, {
+    totalRent: 0, deductAmount: 0, usePoints: 0,
+    actualPayAmount: 0, willEarnPoints: 0, maxDeductAmount: 0
+  })
 }
 
 const handleCreateSubmit = async () => {
   const valid = await createFormRef.value.validate().catch(() => false)
   if (!valid) return
   const [startDate, endDate] = createForm.dateRange
-  await createOrder({
-    customerId: createForm.customerId,
-    instrumentId: createForm.instrumentId,
-    startDate,
-    endDate,
-    payMethod: createForm.payMethod,
-    remark: createForm.remark
-  })
-  ElMessage.success('新建租赁成功')
-  createDialogVisible.value = false
-  fetchList()
+  try {
+    await createOrder({
+      customerId: createForm.customerId,
+      instrumentId: createForm.instrumentId,
+      startDate,
+      endDate,
+      payMethod: createForm.payMethod,
+      remark: createForm.remark,
+      usePoints: createForm.usePoints,
+      usePointsAmount: createForm.usePoints ? pointsInfo.usePoints : 0
+    })
+    let msg = '新建租赁成功'
+    if (pointsInfo.usePoints > 0) {
+      msg += `（已抵扣 ${pointsInfo.usePoints} 积分，省 ¥${pointsInfo.deductAmount.toFixed(2)}）`
+    }
+    if (pointsInfo.willEarnPoints > 0) {
+      msg += `，归还后将获得 ${pointsInfo.willEarnPoints} 积分`
+    }
+    ElMessage.success(msg)
+    createDialogVisible.value = false
+    fetchList()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.msg || '新建租赁失败')
+  }
 }
 
 const openRenewDialog = () => {
@@ -476,6 +704,7 @@ const openReturnForRow = (row) => {
 }
 
 const fillReturnForm = (row) => {
+  estimatedEarnPoints.value = Math.round((Number(row.totalRent || 0) + Number(row.overdueFee || 0)) * earnRate.value)
   returnForm.orderId = row.id
   returnForm.orderNo = row.orderNo
   returnForm.instrumentName = row.instrumentName
@@ -497,38 +726,64 @@ const resetReturnForm = () => {
     refundMethod: '',
     remark: ''
   })
+  estimatedEarnPoints.value = 0
 }
 
 const handleReturnSubmit = async () => {
   const valid = await returnFormRef.value.validate().catch(() => false)
   if (!valid) return
-  await returnOrder({
-    orderId: returnForm.orderId,
-    instrumentCondition: returnForm.instrumentCondition,
-    deductAmount: returnForm.deductAmount,
-    refundMethod: returnForm.refundMethod,
-    remark: returnForm.remark
-  })
-  ElMessage.success('退租成功')
-  returnDialogVisible.value = false
-  fetchList()
+  try {
+    await returnOrder({
+      orderId: returnForm.orderId,
+      instrumentCondition: returnForm.instrumentCondition,
+      deductAmount: returnForm.deductAmount,
+      refundMethod: returnForm.refundMethod,
+      remark: returnForm.remark
+    })
+    let msg = '退租成功'
+    if (estimatedEarnPoints.value > 0) {
+      msg += `，已获得 ${estimatedEarnPoints.value} 积分 🎉`
+    }
+    ElMessage.success(msg)
+    returnDialogVisible.value = false
+    fetchList()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.msg || '退租失败')
+  }
 }
 
 onMounted(() => {
   fetchList()
+  loadPointsConfigs()
 })
 </script>
 
 <style scoped>
-.order {
-  padding: 20px;
-}
+.order { padding: 20px; }
+.toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
+.fee-detail {
+  background: #f5f7fa;
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
 }
+.fee-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 14px;
+}
+.fee-label { color: #606266; }
+.fee-value { color: #303133; font-weight: 500; }
+.fee-value.deduct { color: #67C23A; font-weight: 600; }
+.fee-row.total {
+  border-top: 1px dashed #dcdfe6;
+  margin-top: 8px;
+  padding-top: 16px;
+}
+.fee-row.total .fee-label { font-size: 15px; font-weight: 600; color: #303133; }
+.fee-row.total .fee-value { font-size: 20px; font-weight: 700; color: #F56C6C; }
+.fee-row.earn { padding-top: 12px; }
 </style>

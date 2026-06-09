@@ -14,6 +14,7 @@
         <el-menu-item index="/deposit"><el-icon><Wallet /></el-icon><span>押金管理</span></el-menu-item>
         <el-menu-item index="/maintenance"><el-icon><SetUp /></el-icon><span>维保记录</span></el-menu-item>
         <el-menu-item index="/reminder"><el-icon><Bell /></el-icon><span>到期提醒</span></el-menu-item>
+        <el-menu-item index="/points"><el-icon><CreditCard /></el-icon><span>会员积分</span></el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
