@@ -10,4 +10,5 @@ public class ReturnDTO {
     private BigDecimal deductAmount;
     private String refundMethod;
     private String remark;
+    private String operator;
 }

@@ -237,3 +237,34 @@ CREATE TABLE IF NOT EXISTS coupon_record (
     INDEX idx_customer_id (customer_id),
     INDEX idx_order_id (order_id)
 ) COMMENT '优惠券流水记录表';
+
+CREATE TABLE IF NOT EXISTS work_log (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    process_type VARCHAR(50) NOT NULL COMMENT '流程类型(RENTAL_CREATE/RENTAL_RENEW/RENTAL_RETURN/COUPON_ISSUE/COUPON_USE/COUPON_REVOKE/DEPOSIT_COLLECT/DEPOSIT_REFUND/DEPOSIT_DEDUCT/POINTS_DEDUCT/POINTS_EARN)',
+    order_id BIGINT COMMENT '订单ID',
+    order_no VARCHAR(30) COMMENT '订单编号',
+    customer_id BIGINT COMMENT '客户ID',
+    customer_name VARCHAR(50) COMMENT '客户姓名',
+    instrument_id BIGINT COMMENT '乐器ID',
+    instrument_name VARCHAR(100) COMMENT '乐器名称',
+    coupon_id BIGINT COMMENT '优惠券ID',
+    coupon_no VARCHAR(50) COMMENT '优惠券编号',
+    template_id BIGINT COMMENT '优惠券模板ID',
+    template_name VARCHAR(100) COMMENT '优惠券模板名称',
+    amount DECIMAL(10,2) DEFAULT 0 COMMENT '金额',
+    use_discount TINYINT(1) DEFAULT 0 COMMENT '是否使用优惠',
+    discount_type VARCHAR(20) COMMENT '优惠方式(COUPON/POINTS/BOTH)',
+    coupon_deduct_amount DECIMAL(10,2) DEFAULT 0 COMMENT '优惠券抵扣金额',
+    points_deduct_amount DECIMAL(10,2) DEFAULT 0 COMMENT '积分抵扣金额',
+    used_points INT DEFAULT 0 COMMENT '使用或获得的积分数',
+    pay_method VARCHAR(20) COMMENT '支付方式',
+    operator VARCHAR(50) COMMENT '操作人',
+    remark VARCHAR(500) COMMENT '备注',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted INT DEFAULT 0,
+    INDEX idx_process_type (process_type),
+    INDEX idx_order_id (order_id),
+    INDEX idx_customer_id (customer_id),
+    INDEX idx_operator (operator),
+    INDEX idx_create_time (create_time)
+) COMMENT '工作日志表';

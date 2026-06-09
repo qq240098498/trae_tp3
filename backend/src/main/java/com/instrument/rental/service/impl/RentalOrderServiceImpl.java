@@ -8,6 +8,7 @@ import com.instrument.rental.dto.RenewalDTO;
 import com.instrument.rental.dto.RentalOrderDTO;
 import com.instrument.rental.dto.ReturnDTO;
 import com.instrument.rental.entity.Coupon;
+import com.instrument.rental.entity.Customer;
 import com.instrument.rental.entity.Instrument;
 import com.instrument.rental.entity.Reminder;
 import com.instrument.rental.entity.RenewalRecord;
@@ -15,12 +16,14 @@ import com.instrument.rental.entity.RentalOrder;
 import com.instrument.rental.mapper.RentalOrderMapper;
 import com.instrument.rental.service.CouponService;
 import com.instrument.rental.service.CustomerPointsService;
+import com.instrument.rental.service.CustomerService;
 import com.instrument.rental.service.DepositRecordService;
 import com.instrument.rental.service.InstrumentService;
 import com.instrument.rental.service.PointsConfigService;
 import com.instrument.rental.service.ReminderService;
 import com.instrument.rental.service.RenewalRecordService;
 import com.instrument.rental.service.RentalOrderService;
+import com.instrument.rental.service.WorkLogService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -56,6 +59,12 @@ public class RentalOrderServiceImpl extends ServiceImpl<RentalOrderMapper, Renta
 
     @Autowired
     private CouponService couponService;
+
+    @Autowired
+    private CustomerService customerService;
+
+    @Autowired
+    private WorkLogService workLogService;
 
     @Override
     @Transactional
@@ -148,13 +157,44 @@ public class RentalOrderServiceImpl extends ServiceImpl<RentalOrderMapper, Renta
         }
 
         if (usedPoints > 0) {
-            customerPointsService.deductPoints(dto.getCustomerId(), order.getId(), usedPoints, pointsDeductAmount, "租赁订单积分抵扣");
+            customerPointsService.deductPoints(dto.getCustomerId(), order.getId(), usedPoints, pointsDeductAmount, dto.getOperator(), "租赁订单积分抵扣");
         }
 
-        depositRecordService.collectDeposit(order.getId(), instrument.getDepositAmount(), dto.getPayMethod(), null);
+        depositRecordService.collectDeposit(order.getId(), instrument.getDepositAmount(), dto.getPayMethod(), dto.getOperator(), null);
 
         instrument.setStatus("RENTED");
         instrumentService.updateById(instrument);
+
+        Customer customer = customerService.getById(dto.getCustomerId());
+        boolean useDiscount = (couponId != null) || (usedPoints > 0);
+        String discountType = null;
+        if (couponId != null && usedPoints > 0) {
+            discountType = "BOTH";
+        } else if (couponId != null) {
+            discountType = "COUPON";
+        } else if (usedPoints > 0) {
+            discountType = "POINTS";
+        }
+        workLogService.logRentalCreate(
+                order.getId(),
+                order.getOrderNo(),
+                dto.getCustomerId(),
+                customer != null ? customer.getName() : null,
+                dto.getInstrumentId(),
+                instrument.getName(),
+                totalRent,
+                instrument.getDepositAmount(),
+                actualPayAmount,
+                useDiscount,
+                discountType,
+                couponDeductAmount,
+                couponId,
+                pointsDeductAmount,
+                usedPoints,
+                dto.getPayMethod(),
+                dto.getOperator(),
+                dto.getRemark()
+        );
 
         return order;
     }
@@ -195,6 +235,19 @@ public class RentalOrderServiceImpl extends ServiceImpl<RentalOrderMapper, Renta
             reminderService.updateById(existingReminder);
         }
 
+        Customer customer = customerService.getById(order.getCustomerId());
+        workLogService.logRentalRenew(
+                order.getId(),
+                order.getOrderNo(),
+                order.getCustomerId(),
+                customer != null ? customer.getName() : null,
+                order.getInstrumentId(),
+                instrument.getName(),
+                additionalRent,
+                dto.getOperator(),
+                dto.getRemark()
+        );
+
         return order;
     }
 
@@ -218,13 +271,13 @@ public class RentalOrderServiceImpl extends ServiceImpl<RentalOrderMapper, Renta
         order.setEarnedPoints(earnedPoints);
 
         if (dto.getDeductAmount() != null && dto.getDeductAmount().compareTo(BigDecimal.ZERO) > 0) {
-            depositRecordService.deductDeposit(order.getId(), dto.getDeductAmount(), "归还时扣除押金");
+            depositRecordService.deductDeposit(order.getId(), dto.getDeductAmount(), dto.getOperator(), "归还时扣除押金");
         }
 
         BigDecimal deducted = dto.getDeductAmount() != null ? dto.getDeductAmount() : BigDecimal.ZERO;
         BigDecimal refundAmount = order.getDepositAmount().subtract(deducted);
         if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
-            depositRecordService.refundDeposit(order.getId(), refundAmount, dto.getRefundMethod(), null);
+            depositRecordService.refundDeposit(order.getId(), refundAmount, dto.getRefundMethod(), dto.getOperator(), null);
         }
 
         Instrument instrument = instrumentService.getById(order.getInstrumentId());
@@ -241,8 +294,25 @@ public class RentalOrderServiceImpl extends ServiceImpl<RentalOrderMapper, Renta
         this.updateById(order);
 
         if (earnedPoints > 0) {
-            customerPointsService.addPoints(order.getCustomerId(), order.getId(), earnedPoints, totalCharge, "租赁订单消费获得积分");
+            customerPointsService.addPoints(order.getCustomerId(), order.getId(), earnedPoints, totalCharge, dto.getOperator(), "租赁订单消费获得积分");
         }
+
+        Customer customer = customerService.getById(order.getCustomerId());
+        workLogService.logRentalReturn(
+                order.getId(),
+                order.getOrderNo(),
+                order.getCustomerId(),
+                customer != null ? customer.getName() : null,
+                order.getInstrumentId(),
+                instrument != null ? instrument.getName() : null,
+                totalCharge,
+                order.getOverdueFee(),
+                deducted,
+                refundAmount,
+                earnedPoints,
+                dto.getOperator(),
+                dto.getRemark()
+        );
 
         return order;
     }

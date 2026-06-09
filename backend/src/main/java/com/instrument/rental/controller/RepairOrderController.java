@@ -181,7 +181,7 @@ public class RepairOrderController {
                 damageRegistrationService.updateById(damage);
 
                 if (deductDeposit && damage.getOrderId() != null) {
-                    depositRecordService.deductDeposit(damage.getOrderId(), actualCost, "维修工单[" + repair.getOrderNo() + "]扣款");
+                    depositRecordService.deductDeposit(damage.getOrderId(), actualCost, null, "维修工单[" + repair.getOrderNo() + "]扣款");
                 }
             }
         }

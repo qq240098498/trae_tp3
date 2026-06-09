@@ -2,10 +2,16 @@ package com.instrument.rental.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.instrument.rental.entity.Customer;
 import com.instrument.rental.entity.DepositRecord;
+import com.instrument.rental.entity.RentalOrder;
 import com.instrument.rental.mapper.DepositRecordMapper;
+import com.instrument.rental.service.CustomerService;
 import com.instrument.rental.service.DepositRecordService;
+import com.instrument.rental.service.RentalOrderService;
+import com.instrument.rental.service.WorkLogService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,9 +26,19 @@ public class DepositRecordServiceImpl extends ServiceImpl<DepositRecordMapper, D
     @Autowired
     private DepositRecordMapper depositRecordMapper;
 
+    @Autowired
+    private CustomerService customerService;
+
+    @Lazy
+    @Autowired
+    private RentalOrderService rentalOrderService;
+
+    @Autowired
+    private WorkLogService workLogService;
+
     @Override
     @Transactional
-    public DepositRecord collectDeposit(Long orderId, BigDecimal amount, String payMethod, String remark) {
+    public DepositRecord collectDeposit(Long orderId, BigDecimal amount, String payMethod, String operator, String remark) {
         DepositRecord record = new DepositRecord();
         record.setOrderId(orderId);
         record.setType("COLLECT");
@@ -31,12 +47,28 @@ public class DepositRecordServiceImpl extends ServiceImpl<DepositRecordMapper, D
         record.setStatus("PAID");
         record.setRemark(remark);
         this.save(record);
+
+        RentalOrder order = rentalOrderService.getById(orderId);
+        if (order != null) {
+            Customer customer = customerService.getById(order.getCustomerId());
+            workLogService.logDepositCollect(
+                    orderId,
+                    order.getOrderNo(),
+                    order.getCustomerId(),
+                    customer != null ? customer.getName() : null,
+                    amount,
+                    payMethod,
+                    operator,
+                    remark
+            );
+        }
+
         return record;
     }
 
     @Override
     @Transactional
-    public DepositRecord refundDeposit(Long orderId, BigDecimal amount, String payMethod, String remark) {
+    public DepositRecord refundDeposit(Long orderId, BigDecimal amount, String payMethod, String operator, String remark) {
         RuntimeException lastEx = null;
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
@@ -49,6 +81,22 @@ public class DepositRecordServiceImpl extends ServiceImpl<DepositRecordMapper, D
                     record.setPayMethod(payMethod);
                     record.setStatus("PAID");
                     record.setRemark(remark);
+
+                    RentalOrder order = rentalOrderService.getById(orderId);
+                    if (order != null) {
+                        Customer customer = customerService.getById(order.getCustomerId());
+                        workLogService.logDepositRefund(
+                                orderId,
+                                order.getOrderNo(),
+                                order.getCustomerId(),
+                                customer != null ? customer.getName() : null,
+                                amount,
+                                payMethod,
+                                operator,
+                                remark
+                        );
+                    }
+
                     return record;
                 }
                 BigDecimal available = getAvailableDeposit(orderId);
@@ -65,7 +113,7 @@ public class DepositRecordServiceImpl extends ServiceImpl<DepositRecordMapper, D
 
     @Override
     @Transactional
-    public DepositRecord deductDeposit(Long orderId, BigDecimal amount, String remark) {
+    public DepositRecord deductDeposit(Long orderId, BigDecimal amount, String operator, String remark) {
         RuntimeException lastEx = null;
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
@@ -77,6 +125,21 @@ public class DepositRecordServiceImpl extends ServiceImpl<DepositRecordMapper, D
                     record.setAmount(amount);
                     record.setStatus("PAID");
                     record.setRemark(remark);
+
+                    RentalOrder order = rentalOrderService.getById(orderId);
+                    if (order != null) {
+                        Customer customer = customerService.getById(order.getCustomerId());
+                        workLogService.logDepositDeduct(
+                                orderId,
+                                order.getOrderNo(),
+                                order.getCustomerId(),
+                                customer != null ? customer.getName() : null,
+                                amount,
+                                operator,
+                                remark
+                        );
+                    }
+
                     return record;
                 }
                 BigDecimal available = getAvailableDeposit(orderId);

@@ -84,14 +84,15 @@ public class PointsController {
         Long customerId = Long.valueOf(params.get("customerId").toString());
         Integer points = Integer.valueOf(params.get("points").toString());
         String remark = (String) params.get("remark");
+        String operator = (String) params.get("operator");
         String type = points > 0 ? "MANUAL_ADD" : "MANUAL_DEDUCT";
         BigDecimal amount = BigDecimal.ZERO;
 
         boolean success;
         if (points > 0) {
-            success = customerPointsService.addPoints(customerId, null, points, amount, remark != null ? remark : "管理员手动增加积分");
+            success = customerPointsService.addPoints(customerId, null, points, amount, operator, remark != null ? remark : "管理员手动增加积分");
         } else {
-            success = customerPointsService.deductPoints(customerId, null, Math.abs(points), amount, remark != null ? remark : "管理员手动扣减积分");
+            success = customerPointsService.deductPoints(customerId, null, Math.abs(points), amount, operator, remark != null ? remark : "管理员手动扣减积分");
         }
 
         Map<String, Object> result = new HashMap<>();

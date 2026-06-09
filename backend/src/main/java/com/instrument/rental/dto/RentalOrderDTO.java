@@ -15,4 +15,5 @@ public class RentalOrderDTO {
     private Boolean usePoints;
     private Integer usePointsAmount;
     private Long useCouponId;
+    private String operator;
 }

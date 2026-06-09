@@ -53,6 +53,7 @@ public class DepositRecordController {
                 depositRecord.getOrderId(),
                 depositRecord.getAmount(),
                 depositRecord.getPayMethod(),
+                null,
                 depositRecord.getRemark()
         );
         return Result.ok();
@@ -64,6 +65,7 @@ public class DepositRecordController {
                 depositRecord.getOrderId(),
                 depositRecord.getAmount(),
                 depositRecord.getPayMethod(),
+                null,
                 depositRecord.getRemark()
         );
         return Result.ok();
@@ -74,6 +76,7 @@ public class DepositRecordController {
         depositRecordService.deductDeposit(
                 depositRecord.getOrderId(),
                 depositRecord.getAmount(),
+                null,
                 depositRecord.getRemark()
         );
         return Result.ok();

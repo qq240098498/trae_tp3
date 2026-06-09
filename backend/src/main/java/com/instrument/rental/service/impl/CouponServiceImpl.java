@@ -5,11 +5,17 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.instrument.rental.entity.Coupon;
 import com.instrument.rental.entity.CouponRecord;
 import com.instrument.rental.entity.CouponTemplate;
+import com.instrument.rental.entity.Customer;
+import com.instrument.rental.entity.RentalOrder;
 import com.instrument.rental.mapper.CouponMapper;
 import com.instrument.rental.service.CouponRecordService;
 import com.instrument.rental.service.CouponService;
 import com.instrument.rental.service.CouponTemplateService;
+import com.instrument.rental.service.CustomerService;
+import com.instrument.rental.service.RentalOrderService;
+import com.instrument.rental.service.WorkLogService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +36,16 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
 
     @Autowired
     private CouponRecordService couponRecordService;
+
+    @Autowired
+    private CustomerService customerService;
+
+    @Lazy
+    @Autowired
+    private RentalOrderService rentalOrderService;
+
+    @Autowired
+    private WorkLogService workLogService;
 
     @Override
     @Transactional
@@ -82,6 +98,20 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
                 null,
                 operator,
                 remark != null ? remark : "发放优惠券"
+        );
+
+        Customer customer = customerService.getById(customerId);
+        workLogService.logCouponIssue(
+                coupon.getId(),
+                coupon.getCouponNo(),
+                templateId,
+                template.getName(),
+                customerId,
+                customer != null ? customer.getName() : null,
+                template.getDiscountValue(),
+                template.getType(),
+                operator,
+                remark
         );
 
         return coupon;
@@ -190,6 +220,23 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
                 "订单使用优惠券，抵扣金额：" + discountAmount
         );
 
+        Customer customer = customerService.getById(coupon.getCustomerId());
+        RentalOrder order = rentalOrderService.getById(orderId);
+        CouponTemplate template = couponTemplateService.getTemplateById(coupon.getTemplateId());
+        workLogService.logCouponUse(
+                coupon.getId(),
+                coupon.getCouponNo(),
+                coupon.getTemplateId(),
+                template != null ? template.getName() : null,
+                coupon.getCustomerId(),
+                customer != null ? customer.getName() : null,
+                orderId,
+                order != null ? order.getOrderNo() : null,
+                orderAmount,
+                discountAmount,
+                null
+        );
+
         return coupon;
     }
 
@@ -236,6 +283,20 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
                 operator,
                 remark != null ? remark : "管理员撤回优惠券"
         );
+
+        Customer customer = customerService.getById(coupon.getCustomerId());
+        CouponTemplate template = couponTemplateService.getTemplateById(coupon.getTemplateId());
+        workLogService.logCouponRevoke(
+                coupon.getId(),
+                coupon.getCouponNo(),
+                coupon.getTemplateId(),
+                template != null ? template.getName() : null,
+                coupon.getCustomerId(),
+                customer != null ? customer.getName() : null,
+                operator,
+                remark
+        );
+
         return true;
     }
 

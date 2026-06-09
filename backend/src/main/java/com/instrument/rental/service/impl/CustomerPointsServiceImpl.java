@@ -2,13 +2,19 @@ package com.instrument.rental.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.instrument.rental.entity.Customer;
 import com.instrument.rental.entity.CustomerPoints;
 import com.instrument.rental.entity.PointsRecord;
+import com.instrument.rental.entity.RentalOrder;
 import com.instrument.rental.mapper.CustomerPointsMapper;
 import com.instrument.rental.service.CustomerPointsService;
+import com.instrument.rental.service.CustomerService;
 import com.instrument.rental.service.PointsConfigService;
 import com.instrument.rental.service.PointsRecordService;
+import com.instrument.rental.service.RentalOrderService;
+import com.instrument.rental.service.WorkLogService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +34,16 @@ public class CustomerPointsServiceImpl extends ServiceImpl<CustomerPointsMapper,
 
     @Autowired
     private PointsConfigService pointsConfigService;
+
+    @Autowired
+    private CustomerService customerService;
+
+    @Lazy
+    @Autowired
+    private RentalOrderService rentalOrderService;
+
+    @Autowired
+    private WorkLogService workLogService;
 
     @Override
     public CustomerPoints getByCustomerId(Long customerId) {
@@ -58,13 +74,27 @@ public class CustomerPointsServiceImpl extends ServiceImpl<CustomerPointsMapper,
 
     @Override
     @Transactional
-    public boolean addPoints(Long customerId, Long orderId, Integer points, BigDecimal relatedAmount, String remark) {
+    public boolean addPoints(Long customerId, Long orderId, Integer points, BigDecimal relatedAmount, String operator, String remark) {
         RuntimeException lastEx = null;
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
                 int rows = customerPointsMapper.updatePointsWithBalanceCheck(customerId, points, points, 0);
                 if (rows > 0) {
                     pointsRecordService.addRecord(customerId, orderId, "EARN", points, relatedAmount, remark);
+
+                    Customer customer = customerService.getById(customerId);
+                    RentalOrder order = orderId != null ? rentalOrderService.getById(orderId) : null;
+                    workLogService.logPointsEarn(
+                            customerId,
+                            customer != null ? customer.getName() : null,
+                            orderId,
+                            order != null ? order.getOrderNo() : null,
+                            points,
+                            relatedAmount,
+                            operator,
+                            remark
+                    );
+
                     return true;
                 }
                 lastEx = new RuntimeException("积分添加失败");
@@ -80,13 +110,27 @@ public class CustomerPointsServiceImpl extends ServiceImpl<CustomerPointsMapper,
 
     @Override
     @Transactional
-    public boolean deductPoints(Long customerId, Long orderId, Integer points, BigDecimal relatedAmount, String remark) {
+    public boolean deductPoints(Long customerId, Long orderId, Integer points, BigDecimal relatedAmount, String operator, String remark) {
         RuntimeException lastEx = null;
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
                 int rows = customerPointsMapper.updatePointsWithBalanceCheck(customerId, -points, 0, points);
                 if (rows > 0) {
                     pointsRecordService.addRecord(customerId, orderId, "DEDUCT", -points, relatedAmount, remark);
+
+                    Customer customer = customerService.getById(customerId);
+                    RentalOrder order = orderId != null ? rentalOrderService.getById(orderId) : null;
+                    workLogService.logPointsDeduct(
+                            customerId,
+                            customer != null ? customer.getName() : null,
+                            orderId,
+                            order != null ? order.getOrderNo() : null,
+                            points,
+                            relatedAmount,
+                            operator,
+                            remark
+                    );
+
                     return true;
                 }
                 int available = getAvailablePoints(customerId);

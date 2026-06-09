@@ -7,11 +7,11 @@ import java.math.BigDecimal;
 
 public interface DepositRecordService extends IService<DepositRecord> {
 
-    DepositRecord collectDeposit(Long orderId, BigDecimal amount, String payMethod, String remark);
+    DepositRecord collectDeposit(Long orderId, BigDecimal amount, String payMethod, String operator, String remark);
 
-    DepositRecord refundDeposit(Long orderId, BigDecimal amount, String payMethod, String remark);
+    DepositRecord refundDeposit(Long orderId, BigDecimal amount, String payMethod, String operator, String remark);
 
-    DepositRecord deductDeposit(Long orderId, BigDecimal amount, String remark);
+    DepositRecord deductDeposit(Long orderId, BigDecimal amount, String operator, String remark);
 
     BigDecimal getAvailableDeposit(Long orderId);
 }

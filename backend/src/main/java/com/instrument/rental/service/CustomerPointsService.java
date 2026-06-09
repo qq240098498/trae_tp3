@@ -13,9 +13,9 @@ public interface CustomerPointsService extends IService<CustomerPoints> {
 
     int getAvailablePoints(Long customerId);
 
-    boolean addPoints(Long customerId, Long orderId, Integer points, BigDecimal relatedAmount, String remark);
+    boolean addPoints(Long customerId, Long orderId, Integer points, BigDecimal relatedAmount, String operator, String remark);
 
-    boolean deductPoints(Long customerId, Long orderId, Integer points, BigDecimal relatedAmount, String remark);
+    boolean deductPoints(Long customerId, Long orderId, Integer points, BigDecimal relatedAmount, String operator, String remark);
 
     BigDecimal calculateDeductAmount(Integer points);
 

@@ -9,4 +9,5 @@ public class RenewalDTO {
     private Long orderId;
     private LocalDate newEndDate;
     private String remark;
+    private String operator;
 }
