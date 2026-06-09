@@ -2,15 +2,18 @@ package com.instrument.rental.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.instrument.rental.dto.CouponCalculateVO;
 import com.instrument.rental.dto.PointsCalculateVO;
 import com.instrument.rental.dto.RenewalDTO;
 import com.instrument.rental.dto.RentalOrderDTO;
 import com.instrument.rental.dto.ReturnDTO;
+import com.instrument.rental.entity.Coupon;
 import com.instrument.rental.entity.Instrument;
 import com.instrument.rental.entity.Reminder;
 import com.instrument.rental.entity.RenewalRecord;
 import com.instrument.rental.entity.RentalOrder;
 import com.instrument.rental.mapper.RentalOrderMapper;
+import com.instrument.rental.service.CouponService;
 import com.instrument.rental.service.CustomerPointsService;
 import com.instrument.rental.service.DepositRecordService;
 import com.instrument.rental.service.InstrumentService;
@@ -51,6 +54,9 @@ public class RentalOrderServiceImpl extends ServiceImpl<RentalOrderMapper, Renta
     @Autowired
     private PointsConfigService pointsConfigService;
 
+    @Autowired
+    private CouponService couponService;
+
     @Override
     @Transactional
     public RentalOrder createOrder(RentalOrderDTO dto) {
@@ -65,11 +71,36 @@ public class RentalOrderServiceImpl extends ServiceImpl<RentalOrderMapper, Renta
         long days = ChronoUnit.DAYS.between(dto.getStartDate(), dto.getEndDate());
         BigDecimal totalRent = instrument.getDailyRent().multiply(BigDecimal.valueOf(days)).setScale(2, RoundingMode.HALF_UP);
 
+        Coupon coupon = null;
+        BigDecimal couponDeductAmount = BigDecimal.ZERO;
+        Long couponId = null;
+        boolean canUsePoints = true;
+
+        if (dto.getUseCouponId() != null) {
+            coupon = couponService.getCouponById(dto.getUseCouponId());
+            if (coupon != null) {
+                if (!coupon.getCustomerId().equals(dto.getCustomerId())) {
+                    throw new RuntimeException("优惠券不属于当前客户");
+                }
+                if (!couponService.checkCouponAvailable(coupon, totalRent)) {
+                    throw new RuntimeException("优惠券不可用或不满足最低使用条件");
+                }
+                couponDeductAmount = couponService.calculateDiscount(coupon, totalRent);
+                couponId = coupon.getId();
+                if (coupon.getPointsCompatible() != null && !coupon.getPointsCompatible()) {
+                    canUsePoints = false;
+                }
+            }
+        }
+
         BigDecimal pointsDeductAmount = BigDecimal.ZERO;
         Integer usedPoints = 0;
-        BigDecimal actualPayAmount = totalRent;
+        BigDecimal actualPayAmount = totalRent.subtract(couponDeductAmount).setScale(2, RoundingMode.HALF_UP);
+        if (actualPayAmount.compareTo(BigDecimal.ZERO) < 0) {
+            actualPayAmount = BigDecimal.ZERO;
+        }
 
-        if (Boolean.TRUE.equals(dto.getUsePoints()) && dto.getUsePointsAmount() != null && dto.getUsePointsAmount() > 0) {
+        if (canUsePoints && Boolean.TRUE.equals(dto.getUsePoints()) && dto.getUsePointsAmount() != null && dto.getUsePointsAmount() > 0) {
             int availablePoints = customerPointsService.getAvailablePoints(dto.getCustomerId());
             int pointsToUse = Math.min(dto.getUsePointsAmount(), availablePoints);
 
@@ -85,11 +116,13 @@ public class RentalOrderServiceImpl extends ServiceImpl<RentalOrderMapper, Renta
             if (pointsToUse > 0 && tempDeductAmount.compareTo(BigDecimal.ZERO) > 0) {
                 pointsDeductAmount = tempDeductAmount;
                 usedPoints = pointsToUse;
-                actualPayAmount = totalRent.subtract(pointsDeductAmount).setScale(2, RoundingMode.HALF_UP);
+                actualPayAmount = totalRent.subtract(couponDeductAmount).subtract(pointsDeductAmount).setScale(2, RoundingMode.HALF_UP);
                 if (actualPayAmount.compareTo(BigDecimal.ZERO) < 0) {
                     actualPayAmount = BigDecimal.ZERO;
                 }
             }
+        } else if (!canUsePoints && Boolean.TRUE.equals(dto.getUsePoints())) {
+            throw new RuntimeException("当前优惠券与积分抵扣互斥，无法同时使用");
         }
 
         RentalOrder order = new RentalOrder();
@@ -103,10 +136,16 @@ public class RentalOrderServiceImpl extends ServiceImpl<RentalOrderMapper, Renta
         order.setDepositAmount(instrument.getDepositAmount());
         order.setPointsDeductAmount(pointsDeductAmount);
         order.setUsedPoints(usedPoints);
+        order.setCouponId(couponId);
+        order.setCouponDeductAmount(couponDeductAmount);
         order.setActualPayAmount(actualPayAmount);
         order.setStatus("ACTIVE");
         order.setRemark(dto.getRemark());
         this.save(order);
+
+        if (coupon != null && couponId != null) {
+            couponService.useCoupon(couponId, order.getId(), totalRent);
+        }
 
         if (usedPoints > 0) {
             customerPointsService.deductPoints(dto.getCustomerId(), order.getId(), usedPoints, pointsDeductAmount, "租赁订单积分抵扣");
@@ -251,6 +290,89 @@ public class RentalOrderServiceImpl extends ServiceImpl<RentalOrderMapper, Renta
         vo.setUsePoints(pointsToUse);
         vo.setDeductAmount(deductAmount);
         vo.setActualPayAmount(totalRent.subtract(deductAmount).setScale(2, RoundingMode.HALF_UP));
+
+        Integer willEarnPoints = customerPointsService.calculateEarnedPoints(totalRent);
+        vo.setWillEarnPoints(willEarnPoints);
+
+        return vo;
+    }
+
+    @Override
+    public CouponCalculateVO calculateWithCoupon(Long customerId, Long instrumentId, LocalDate startDate, LocalDate endDate,
+                                                 Long couponId, Integer usePoints) {
+        CouponCalculateVO vo = new CouponCalculateVO();
+
+        Instrument instrument = instrumentService.getById(instrumentId);
+        long days = ChronoUnit.DAYS.between(startDate, endDate);
+        BigDecimal totalRent = instrument.getDailyRent().multiply(BigDecimal.valueOf(days)).setScale(2, RoundingMode.HALF_UP);
+        vo.setTotalRent(totalRent);
+
+        var availableCoupons = couponService.getCustomerAvailableCouponsForAmount(customerId, totalRent);
+        vo.setAvailableCoupons(availableCoupons);
+
+        int availablePoints = customerPointsService.getAvailablePoints(customerId);
+        BigDecimal earnRate = pointsConfigService.getEarnRate();
+        BigDecimal deductRate = pointsConfigService.getDeductRate();
+        BigDecimal maxDeductPercent = pointsConfigService.getMaxDeductPercent();
+
+        BigDecimal availableDeductAmount = customerPointsService.calculateDeductAmount(availablePoints);
+        BigDecimal maxDeductAmount = totalRent.multiply(maxDeductPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+
+        if (availableDeductAmount.compareTo(maxDeductAmount) > 0) {
+            availableDeductAmount = maxDeductAmount;
+        }
+
+        vo.setAvailablePoints(availablePoints);
+        vo.setAvailableDeductAmount(availableDeductAmount);
+        vo.setEarnRate(earnRate);
+        vo.setDeductRate(deductRate);
+        vo.setMaxDeductPercent(maxDeductPercent);
+        vo.setMaxDeductAmount(maxDeductAmount);
+
+        Coupon selectedCoupon = null;
+        BigDecimal couponDeductAmount = BigDecimal.ZERO;
+        boolean canUsePoints = true;
+
+        if (couponId != null) {
+            Coupon coupon = couponService.getCouponById(couponId);
+            if (coupon != null && coupon.getCustomerId().equals(customerId)
+                    && couponService.checkCouponAvailable(coupon, totalRent)) {
+                selectedCoupon = coupon;
+                couponDeductAmount = couponService.calculateDiscount(coupon, totalRent);
+                if (coupon.getPointsCompatible() != null && !coupon.getPointsCompatible()) {
+                    canUsePoints = false;
+                }
+            } else {
+                vo.setMessage("所选优惠券不可用或不满足最低使用条件");
+            }
+        }
+
+        vo.setSelectedCoupon(selectedCoupon);
+        vo.setCouponDeductAmount(couponDeductAmount);
+        vo.setPointsCompatible(canUsePoints);
+
+        int pointsToUse = 0;
+        BigDecimal pointsDeductAmount = BigDecimal.ZERO;
+        if (canUsePoints && usePoints != null && usePoints > 0) {
+            pointsToUse = Math.min(usePoints, availablePoints);
+            BigDecimal tempDeduct = customerPointsService.calculateDeductAmount(pointsToUse);
+            if (tempDeduct.compareTo(maxDeductAmount) > 0) {
+                tempDeduct = maxDeductAmount;
+                pointsToUse = customerPointsService.calculatePointsToDeduct(tempDeduct);
+            }
+            pointsDeductAmount = tempDeduct;
+        } else if (!canUsePoints && usePoints != null && usePoints > 0) {
+            vo.setMessage("当前优惠券与积分抵扣互斥，已自动禁用积分抵扣");
+        }
+
+        vo.setUsePoints(pointsToUse);
+        vo.setPointsDeductAmount(pointsDeductAmount);
+
+        BigDecimal actualPay = totalRent.subtract(couponDeductAmount).subtract(pointsDeductAmount).setScale(2, RoundingMode.HALF_UP);
+        if (actualPay.compareTo(BigDecimal.ZERO) < 0) {
+            actualPay = BigDecimal.ZERO;
+        }
+        vo.setActualPayAmount(actualPay);
 
         Integer willEarnPoints = customerPointsService.calculateEarnedPoints(totalRent);
         vo.setWillEarnPoints(willEarnPoints);

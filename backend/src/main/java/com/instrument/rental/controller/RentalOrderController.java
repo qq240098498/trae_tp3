@@ -59,6 +59,8 @@ public class RentalOrderController {
             map.put("depositAmount", order.getDepositAmount());
             map.put("pointsDeductAmount", order.getPointsDeductAmount());
             map.put("usedPoints", order.getUsedPoints());
+            map.put("couponId", order.getCouponId());
+            map.put("couponDeductAmount", order.getCouponDeductAmount());
             map.put("actualPayAmount", order.getActualPayAmount());
             map.put("earnedPoints", order.getEarnedPoints());
             map.put("status", order.getStatus());
@@ -127,6 +129,19 @@ public class RentalOrderController {
             @RequestParam java.time.LocalDate endDate,
             @RequestParam(required = false) Integer usePoints) {
         com.instrument.rental.dto.PointsCalculateVO vo = rentalOrderService.calculatePoints(customerId, instrumentId, startDate, endDate, usePoints);
+        return Result.ok(vo);
+    }
+
+    @GetMapping("/calculate-coupon")
+    public Result<com.instrument.rental.dto.CouponCalculateVO> calculateWithCoupon(
+            @RequestParam Long customerId,
+            @RequestParam Long instrumentId,
+            @RequestParam java.time.LocalDate startDate,
+            @RequestParam java.time.LocalDate endDate,
+            @RequestParam(required = false) Long couponId,
+            @RequestParam(required = false) Integer usePoints) {
+        com.instrument.rental.dto.CouponCalculateVO vo = rentalOrderService.calculateWithCoupon(
+                customerId, instrumentId, startDate, endDate, couponId, usePoints);
         return Result.ok(vo);
     }
 }

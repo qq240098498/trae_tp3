@@ -21,6 +21,8 @@ public class RentalOrder {
     private BigDecimal depositAmount;
     private BigDecimal pointsDeductAmount;
     private Integer usedPoints;
+    private Long couponId;
+    private BigDecimal couponDeductAmount;
     private BigDecimal actualPayAmount;
     private Integer earnedPoints;
     private String status;

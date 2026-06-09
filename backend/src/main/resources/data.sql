@@ -25,3 +25,9 @@ INSERT IGNORE INTO customer_points (id, customer_id, total_points, available_poi
 (1, 1, 0, 0, 0, 0),
 (2, 2, 0, 0, 0, 0),
 (3, 3, 0, 0, 0, 0);
+
+INSERT IGNORE INTO coupon_template (id, name, type, discount_value, min_amount, max_discount_amount, valid_days, points_compatible, total_count, description) VALUES
+(1, '新人满100减20券', 'FIXED', 20.00, 100.00, NULL, 30, 1, 100, '新用户专享，订单满100元可用，有效期30天，可与积分组合使用'),
+(2, '9折优惠券', 'PERCENT', 9.00, 50.00, 100.00, 15, 1, 200, '全场9折，最低消费50元，最高优惠100元，有效期15天'),
+(3, '满500减100大额券', 'FIXED', 100.00, 500.00, NULL, 60, 0, 50, '满500元立减100元，有效期60天，与积分抵扣互斥，不可同时使用'),
+(4, '8.5折乐器租赁券', 'PERCENT', 8.50, 200.00, 200.00, 45, 1, -1, '8.5折优惠，最低消费200元，最高优惠200元，不限量');

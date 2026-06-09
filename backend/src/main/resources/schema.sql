@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS rental_order (
     deposit_amount DECIMAL(10,2) NOT NULL COMMENT '押金金额',
     points_deduct_amount DECIMAL(10,2) DEFAULT 0 COMMENT '积分抵扣金额',
     used_points INT DEFAULT 0 COMMENT '使用积分数',
+    coupon_id BIGINT COMMENT '使用优惠券ID',
+    coupon_deduct_amount DECIMAL(10,2) DEFAULT 0 COMMENT '优惠券抵扣金额',
     actual_pay_amount DECIMAL(10,2) DEFAULT 0 COMMENT '实际支付金额',
     earned_points INT DEFAULT 0 COMMENT '获得积分数',
     status VARCHAR(20) DEFAULT 'ACTIVE' COMMENT '状态(ACTIVE/RETURNED/OVERDUE/CANCELLED)',
@@ -173,3 +175,65 @@ CREATE TABLE IF NOT EXISTS points_record (
     INDEX idx_customer_id (customer_id),
     INDEX idx_order_id (order_id)
 ) COMMENT '积分记录表';
+
+CREATE TABLE IF NOT EXISTS coupon_template (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL COMMENT '优惠券名称',
+    type VARCHAR(20) NOT NULL COMMENT '类型(FIXED满减/PERCENT折扣)',
+    discount_value DECIMAL(10,2) NOT NULL COMMENT '优惠值(满减金额或折扣比例)',
+    min_amount DECIMAL(10,2) DEFAULT 0 COMMENT '最低使用金额',
+    max_discount_amount DECIMAL(10,2) COMMENT '最大优惠金额(折扣券用)',
+    valid_days INT COMMENT '有效天数(从发放日起算)',
+    valid_start_date DATE COMMENT '固定有效期开始',
+    valid_end_date DATE COMMENT '固定有效期结束',
+    points_compatible TINYINT(1) DEFAULT 1 COMMENT '是否可与积分组合使用(1是/0否互斥)',
+    total_count INT DEFAULT -1 COMMENT '发放总量(-1不限)',
+    used_count INT DEFAULT 0 COMMENT '已使用数量',
+    issued_count INT DEFAULT 0 COMMENT '已发放数量',
+    status VARCHAR(20) DEFAULT 'ACTIVE' COMMENT '状态(ACTIVE/INACTIVE/EXPIRED)',
+    description VARCHAR(500) COMMENT '描述',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted INT DEFAULT 0
+) COMMENT '优惠券模板表';
+
+CREATE TABLE IF NOT EXISTS coupon (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    coupon_no VARCHAR(50) NOT NULL UNIQUE COMMENT '优惠券编号',
+    template_id BIGINT NOT NULL COMMENT '模板ID',
+    customer_id BIGINT NOT NULL COMMENT '客户ID',
+    type VARCHAR(20) NOT NULL COMMENT '类型(FIXED满减/PERCENT折扣)',
+    discount_value DECIMAL(10,2) NOT NULL COMMENT '优惠值',
+    min_amount DECIMAL(10,2) DEFAULT 0 COMMENT '最低使用金额',
+    max_discount_amount DECIMAL(10,2) COMMENT '最大优惠金额',
+    points_compatible TINYINT(1) DEFAULT 1 COMMENT '是否可与积分组合使用',
+    status VARCHAR(20) DEFAULT 'AVAILABLE' COMMENT '状态(AVAILABLE/USED/EXPIRED)',
+    valid_start_date DATE NOT NULL COMMENT '有效期开始',
+    valid_end_date DATE NOT NULL COMMENT '有效期结束',
+    order_id BIGINT COMMENT '使用订单ID',
+    used_time DATETIME COMMENT '使用时间',
+    remark VARCHAR(500) COMMENT '备注',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted INT DEFAULT 0,
+    INDEX idx_customer_id (customer_id),
+    INDEX idx_template_id (template_id),
+    INDEX idx_status (status)
+) COMMENT '用户优惠券表';
+
+CREATE TABLE IF NOT EXISTS coupon_record (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    coupon_id BIGINT NOT NULL COMMENT '优惠券ID',
+    customer_id BIGINT NOT NULL COMMENT '客户ID',
+    template_id BIGINT COMMENT '模板ID',
+    order_id BIGINT COMMENT '关联订单ID',
+    type VARCHAR(30) NOT NULL COMMENT '类型(ISSUE发放/USE使用/EXPIRE过期/REVOKE撤回)',
+    discount_amount DECIMAL(10,2) COMMENT '优惠金额',
+    operator VARCHAR(50) COMMENT '操作人',
+    remark VARCHAR(500) COMMENT '备注',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted INT DEFAULT 0,
+    INDEX idx_coupon_id (coupon_id),
+    INDEX idx_customer_id (customer_id),
+    INDEX idx_order_id (order_id)
+) COMMENT '优惠券流水记录表';
