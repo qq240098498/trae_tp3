@@ -2,6 +2,9 @@ package com.instrument.rental.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.instrument.rental.common.Result;
+import com.instrument.rental.dto.CouponBatchIssueDTO;
+import com.instrument.rental.dto.CouponIssueDTO;
+import com.instrument.rental.dto.CouponRevokeDTO;
 import com.instrument.rental.entity.Coupon;
 import com.instrument.rental.entity.CouponRecord;
 import com.instrument.rental.entity.CouponTemplate;
@@ -68,13 +71,13 @@ public class CouponController {
     }
 
     @PostMapping("/issue")
-    public Result<Map<String, Object>> issueCoupon(@RequestBody Map<String, Object> params) {
-        Long templateId = Long.valueOf(params.get("templateId").toString());
-        Long customerId = Long.valueOf(params.get("customerId").toString());
-        String operator = params.get("operator") != null ? params.get("operator").toString() : null;
-        String remark = params.get("remark") != null ? params.get("remark").toString() : null;
-
-        Coupon coupon = couponService.issueCoupon(templateId, customerId, operator, remark);
+    public Result<Map<String, Object>> issueCoupon(@RequestBody CouponIssueDTO dto) {
+        Coupon coupon = couponService.issueCoupon(
+                dto.getTemplateId(),
+                dto.getCustomerId(),
+                dto.getOperator(),
+                dto.getRemark()
+        );
         Map<String, Object> result = new HashMap<>();
         result.put("coupon", coupon);
         result.put("success", true);
@@ -82,13 +85,13 @@ public class CouponController {
     }
 
     @PostMapping("/issue/batch")
-    public Result<Map<String, Object>> issueCouponsBatch(@RequestBody Map<String, Object> params) {
-        Long templateId = Long.valueOf(params.get("templateId").toString());
-        List<Long> customerIds = (List<Long>) params.get("customerIds");
-        String operator = params.get("operator") != null ? params.get("operator").toString() : null;
-        String remark = params.get("remark") != null ? params.get("remark").toString() : null;
-
-        List<Coupon> coupons = couponService.issueCouponsBatch(templateId, customerIds, operator, remark);
+    public Result<Map<String, Object>> issueCouponsBatch(@RequestBody CouponBatchIssueDTO dto) {
+        List<Coupon> coupons = couponService.issueCouponsBatch(
+                dto.getTemplateId(),
+                dto.getCustomerIds(),
+                dto.getOperator(),
+                dto.getRemark()
+        );
         Map<String, Object> result = new HashMap<>();
         result.put("coupons", coupons);
         result.put("count", coupons.size());
@@ -129,9 +132,10 @@ public class CouponController {
     }
 
     @PostMapping("/{id}/revoke")
-    public Result<Map<String, Object>> revokeCoupon(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> params) {
-        String operator = params != null && params.get("operator") != null ? params.get("operator").toString() : null;
-        String remark = params != null && params.get("remark") != null ? params.get("remark").toString() : null;
+    public Result<Map<String, Object>> revokeCoupon(@PathVariable Long id,
+                                                    @RequestBody(required = false) CouponRevokeDTO dto) {
+        String operator = dto != null ? dto.getOperator() : null;
+        String remark = dto != null ? dto.getRemark() : null;
 
         boolean success = couponService.revokeCoupon(id, operator, remark);
         Map<String, Object> result = new HashMap<>();
