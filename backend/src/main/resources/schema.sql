@@ -132,3 +132,45 @@ CREATE TABLE IF NOT EXISTS repair_order (
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted INT DEFAULT 0
 ) COMMENT '维修工单表';
+
+ALTER TABLE rental_order ADD COLUMN IF NOT EXISTS points_deduct_amount DECIMAL(10,2) DEFAULT 0 COMMENT '积分抵扣金额';
+ALTER TABLE rental_order ADD COLUMN IF NOT EXISTS used_points INT DEFAULT 0 COMMENT '使用积分数';
+ALTER TABLE rental_order ADD COLUMN IF NOT EXISTS actual_pay_amount DECIMAL(10,2) DEFAULT 0 COMMENT '实际支付金额';
+ALTER TABLE rental_order ADD COLUMN IF NOT EXISTS earned_points INT DEFAULT 0 COMMENT '获得积分数';
+
+CREATE TABLE IF NOT EXISTS points_config (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    config_key VARCHAR(50) NOT NULL UNIQUE COMMENT '配置键',
+    config_name VARCHAR(100) NOT NULL COMMENT '配置名称',
+    config_value DECIMAL(10,2) NOT NULL COMMENT '配置值',
+    description VARCHAR(500) COMMENT '描述',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted INT DEFAULT 0
+) COMMENT '积分配置表';
+
+CREATE TABLE IF NOT EXISTS customer_points (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    customer_id BIGINT NOT NULL UNIQUE COMMENT '客户ID',
+    total_points INT DEFAULT 0 COMMENT '累计获得积分',
+    available_points INT DEFAULT 0 COMMENT '可用积分',
+    used_points INT DEFAULT 0 COMMENT '已使用积分',
+    expired_points INT DEFAULT 0 COMMENT '已过期积分',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted INT DEFAULT 0
+) COMMENT '客户积分账户表';
+
+CREATE TABLE IF NOT EXISTS points_record (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    customer_id BIGINT NOT NULL COMMENT '客户ID',
+    order_id BIGINT COMMENT '关联订单ID',
+    type VARCHAR(30) NOT NULL COMMENT '类型(EARN/DEDUCT/MANUAL_ADD/MANUAL_DEDUCT/EXPIRE)',
+    points INT NOT NULL COMMENT '积分变动(正数增加,负数减少)',
+    related_amount DECIMAL(10,2) COMMENT '关联金额',
+    remark VARCHAR(500) COMMENT '备注',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted INT DEFAULT 0,
+    INDEX idx_customer_id (customer_id),
+    INDEX idx_order_id (order_id)
+) COMMENT '积分记录表';

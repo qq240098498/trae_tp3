@@ -15,3 +15,13 @@ INSERT IGNORE INTO rental_order (id, order_no, customer_id, instrument_id, start
 
 INSERT IGNORE INTO deposit_record (id, order_id, type, amount, pay_method, status, remark) VALUES
 (1, 1, 'COLLECT', 1000.00, 'WECHAT', 'COMPLETED', '收取押金');
+
+INSERT IGNORE INTO points_config (id, config_key, config_name, config_value, description) VALUES
+(1, 'EARN_RATE', '消费积分获得比例', 1.00, '每消费1元可获得的积分数'),
+(2, 'DEDUCT_RATE', '积分抵扣现金比例', 100.00, '每100积分可抵扣1元现金'),
+(3, 'MAX_DEDUCT_PERCENT', '积分抵扣最高百分比', 30.00, '积分抵扣金额最高不超过订单金额的30%');
+
+INSERT IGNORE INTO customer_points (id, customer_id, total_points, available_points, used_points, expired_points) VALUES
+(1, 1, 0, 0, 0, 0),
+(2, 2, 0, 0, 0, 0),
+(3, 3, 0, 0, 0, 0);

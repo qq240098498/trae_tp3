@@ -2,6 +2,7 @@ package com.instrument.rental.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.instrument.rental.dto.PointsCalculateVO;
 import com.instrument.rental.dto.RenewalDTO;
 import com.instrument.rental.dto.RentalOrderDTO;
 import com.instrument.rental.dto.ReturnDTO;
@@ -10,8 +11,10 @@ import com.instrument.rental.entity.Reminder;
 import com.instrument.rental.entity.RenewalRecord;
 import com.instrument.rental.entity.RentalOrder;
 import com.instrument.rental.mapper.RentalOrderMapper;
+import com.instrument.rental.service.CustomerPointsService;
 import com.instrument.rental.service.DepositRecordService;
 import com.instrument.rental.service.InstrumentService;
+import com.instrument.rental.service.PointsConfigService;
 import com.instrument.rental.service.ReminderService;
 import com.instrument.rental.service.RenewalRecordService;
 import com.instrument.rental.service.RentalOrderService;
@@ -42,6 +45,12 @@ public class RentalOrderServiceImpl extends ServiceImpl<RentalOrderMapper, Renta
     @Autowired
     private ReminderService reminderService;
 
+    @Autowired
+    private CustomerPointsService customerPointsService;
+
+    @Autowired
+    private PointsConfigService pointsConfigService;
+
     @Override
     @Transactional
     public RentalOrder createOrder(RentalOrderDTO dto) {
@@ -56,6 +65,33 @@ public class RentalOrderServiceImpl extends ServiceImpl<RentalOrderMapper, Renta
         long days = ChronoUnit.DAYS.between(dto.getStartDate(), dto.getEndDate());
         BigDecimal totalRent = instrument.getDailyRent().multiply(BigDecimal.valueOf(days)).setScale(2, RoundingMode.HALF_UP);
 
+        BigDecimal pointsDeductAmount = BigDecimal.ZERO;
+        Integer usedPoints = 0;
+        BigDecimal actualPayAmount = totalRent;
+
+        if (Boolean.TRUE.equals(dto.getUsePoints()) && dto.getUsePointsAmount() != null && dto.getUsePointsAmount() > 0) {
+            int availablePoints = customerPointsService.getAvailablePoints(dto.getCustomerId());
+            int pointsToUse = Math.min(dto.getUsePointsAmount(), availablePoints);
+
+            BigDecimal maxDeductPercent = pointsConfigService.getMaxDeductPercent();
+            BigDecimal maxDeductAmount = totalRent.multiply(maxDeductPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+
+            BigDecimal tempDeductAmount = customerPointsService.calculateDeductAmount(pointsToUse);
+            if (tempDeductAmount.compareTo(maxDeductAmount) > 0) {
+                tempDeductAmount = maxDeductAmount;
+                pointsToUse = customerPointsService.calculatePointsToDeduct(tempDeductAmount);
+            }
+
+            if (pointsToUse > 0 && tempDeductAmount.compareTo(BigDecimal.ZERO) > 0) {
+                pointsDeductAmount = tempDeductAmount;
+                usedPoints = pointsToUse;
+                actualPayAmount = totalRent.subtract(pointsDeductAmount).setScale(2, RoundingMode.HALF_UP);
+                if (actualPayAmount.compareTo(BigDecimal.ZERO) < 0) {
+                    actualPayAmount = BigDecimal.ZERO;
+                }
+            }
+        }
+
         RentalOrder order = new RentalOrder();
         order.setOrderNo(orderNo);
         order.setCustomerId(dto.getCustomerId());
@@ -65,9 +101,16 @@ public class RentalOrderServiceImpl extends ServiceImpl<RentalOrderMapper, Renta
         order.setDailyRent(instrument.getDailyRent());
         order.setTotalRent(totalRent);
         order.setDepositAmount(instrument.getDepositAmount());
+        order.setPointsDeductAmount(pointsDeductAmount);
+        order.setUsedPoints(usedPoints);
+        order.setActualPayAmount(actualPayAmount);
         order.setStatus("ACTIVE");
         order.setRemark(dto.getRemark());
         this.save(order);
+
+        if (usedPoints > 0) {
+            customerPointsService.deductPoints(dto.getCustomerId(), order.getId(), usedPoints, pointsDeductAmount, "租赁订单积分抵扣");
+        }
 
         depositRecordService.collectDeposit(order.getId(), instrument.getDepositAmount(), dto.getPayMethod(), null);
 
@@ -124,11 +167,16 @@ public class RentalOrderServiceImpl extends ServiceImpl<RentalOrderMapper, Renta
         LocalDate today = LocalDate.now();
         order.setActualReturnDate(today);
 
+        BigDecimal totalCharge = order.getTotalRent();
         if (today.isAfter(order.getEndDate())) {
             long overdueDays = ChronoUnit.DAYS.between(order.getEndDate(), today);
             BigDecimal overdueFee = order.getDailyRent().multiply(BigDecimal.valueOf(overdueDays)).multiply(BigDecimal.valueOf(1.5)).setScale(2, RoundingMode.HALF_UP);
             order.setOverdueFee(overdueFee);
+            totalCharge = totalCharge.add(overdueFee);
         }
+
+        Integer earnedPoints = customerPointsService.calculateEarnedPoints(totalCharge);
+        order.setEarnedPoints(earnedPoints);
 
         if (dto.getDeductAmount() != null && dto.getDeductAmount().compareTo(BigDecimal.ZERO) > 0) {
             depositRecordService.deductDeposit(order.getId(), dto.getDeductAmount(), "归还时扣除押金");
@@ -153,6 +201,60 @@ public class RentalOrderServiceImpl extends ServiceImpl<RentalOrderMapper, Renta
         }
         this.updateById(order);
 
+        if (earnedPoints > 0) {
+            customerPointsService.addPoints(order.getCustomerId(), order.getId(), earnedPoints, totalCharge, "租赁订单消费获得积分");
+        }
+
         return order;
+    }
+
+    @Override
+    public PointsCalculateVO calculatePoints(Long customerId, Long instrumentId, LocalDate startDate, LocalDate endDate, Integer usePoints) {
+        PointsCalculateVO vo = new PointsCalculateVO();
+
+        Instrument instrument = instrumentService.getById(instrumentId);
+        long days = ChronoUnit.DAYS.between(startDate, endDate);
+        BigDecimal totalRent = instrument.getDailyRent().multiply(BigDecimal.valueOf(days)).setScale(2, RoundingMode.HALF_UP);
+
+        int availablePoints = customerPointsService.getAvailablePoints(customerId);
+        BigDecimal earnRate = pointsConfigService.getEarnRate();
+        BigDecimal deductRate = pointsConfigService.getDeductRate();
+        BigDecimal maxDeductPercent = pointsConfigService.getMaxDeductPercent();
+
+        BigDecimal availableDeductAmount = customerPointsService.calculateDeductAmount(availablePoints);
+        BigDecimal maxDeductAmount = totalRent.multiply(maxDeductPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+
+        if (availableDeductAmount.compareTo(maxDeductAmount) > 0) {
+            availableDeductAmount = maxDeductAmount;
+        }
+
+        vo.setAvailablePoints(availablePoints);
+        vo.setAvailableDeductAmount(availableDeductAmount);
+        vo.setTotalRent(totalRent);
+        vo.setEarnRate(earnRate);
+        vo.setDeductRate(deductRate);
+        vo.setMaxDeductPercent(maxDeductPercent);
+        vo.setMaxDeductAmount(maxDeductAmount);
+
+        int pointsToUse = 0;
+        BigDecimal deductAmount = BigDecimal.ZERO;
+        if (usePoints != null && usePoints > 0) {
+            pointsToUse = Math.min(usePoints, availablePoints);
+            BigDecimal tempDeduct = customerPointsService.calculateDeductAmount(pointsToUse);
+            if (tempDeduct.compareTo(maxDeductAmount) > 0) {
+                tempDeduct = maxDeductAmount;
+                pointsToUse = customerPointsService.calculatePointsToDeduct(tempDeduct);
+            }
+            deductAmount = tempDeduct;
+        }
+
+        vo.setUsePoints(pointsToUse);
+        vo.setDeductAmount(deductAmount);
+        vo.setActualPayAmount(totalRent.subtract(deductAmount).setScale(2, RoundingMode.HALF_UP));
+
+        Integer willEarnPoints = customerPointsService.calculateEarnedPoints(totalRent);
+        vo.setWillEarnPoints(willEarnPoints);
+
+        return vo;
     }
 }

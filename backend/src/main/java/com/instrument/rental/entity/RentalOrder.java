@@ -19,6 +19,10 @@ public class RentalOrder {
     private BigDecimal dailyRent;
     private BigDecimal totalRent;
     private BigDecimal depositAmount;
+    private BigDecimal pointsDeductAmount;
+    private Integer usedPoints;
+    private BigDecimal actualPayAmount;
+    private Integer earnedPoints;
     private String status;
     private LocalDate actualReturnDate;
     private BigDecimal overdueFee;

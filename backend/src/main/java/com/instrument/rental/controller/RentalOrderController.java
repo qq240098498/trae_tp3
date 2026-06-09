@@ -57,6 +57,10 @@ public class RentalOrderController {
             map.put("dailyRent", order.getDailyRent());
             map.put("totalRent", order.getTotalRent());
             map.put("depositAmount", order.getDepositAmount());
+            map.put("pointsDeductAmount", order.getPointsDeductAmount());
+            map.put("usedPoints", order.getUsedPoints());
+            map.put("actualPayAmount", order.getActualPayAmount());
+            map.put("earnedPoints", order.getEarnedPoints());
             map.put("status", order.getStatus());
             map.put("actualReturnDate", order.getActualReturnDate());
             map.put("overdueFee", order.getOverdueFee());
@@ -113,5 +117,16 @@ public class RentalOrderController {
     public Result<RentalOrder> returnOrder(@RequestBody ReturnDTO dto) {
         RentalOrder order = rentalOrderService.returnOrder(dto);
         return Result.ok(order);
+    }
+
+    @GetMapping("/calculate-points")
+    public Result<com.instrument.rental.dto.PointsCalculateVO> calculatePoints(
+            @RequestParam Long customerId,
+            @RequestParam Long instrumentId,
+            @RequestParam java.time.LocalDate startDate,
+            @RequestParam java.time.LocalDate endDate,
+            @RequestParam(required = false) Integer usePoints) {
+        com.instrument.rental.dto.PointsCalculateVO vo = rentalOrderService.calculatePoints(customerId, instrumentId, startDate, endDate, usePoints);
+        return Result.ok(vo);
     }
 }

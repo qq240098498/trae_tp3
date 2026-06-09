@@ -12,4 +12,6 @@ public class RentalOrderDTO {
     private LocalDate endDate;
     private String payMethod;
     private String remark;
+    private Boolean usePoints;
+    private Integer usePointsAmount;
 }
