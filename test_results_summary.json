@@ -1,0 +1,19 @@
+﻿{
+    "TestName":  "Music Instrument Rental - Main Flow Integration Test",
+    "TestDate":  "2026-06-09 11:43:11",
+    "TotalTests":  26,
+    "PassCount":  26,
+    "FailCount":  0,
+    "WarnCount":  0,
+    "PassRate":  100,
+    "Orders":  {
+                   "S1_NormalReturn":  8,
+                   "S3_DamageRepair":  10,
+                   "S2_Overdue":  9,
+                   "S4_FullIntegrated":  11
+               },
+    "Repairs":  {
+                    "S3_RepairId":  2,
+                    "S3_DamageId":  3
+                }
+}
