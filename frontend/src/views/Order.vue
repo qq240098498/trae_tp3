@@ -57,6 +57,12 @@
           <span v-else>-</span>
         </template>
       </el-table-column>
+      <el-table-column prop="couponDeductAmount" label="优惠券抵扣" min-width="100" align="right">
+        <template #default="{ row }">
+          <span v-if="row.couponDeductAmount > 0" style="color: #E91E63; font-weight: 500">-¥{{ row.couponDeductAmount?.toFixed(2) }}</span>
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="actualPayAmount" label="实付金额" min-width="100" align="right">
         <template #default="{ row }">
           <span style="color: #F56C6C; font-weight: 600">¥{{ row.actualPayAmount?.toFixed(2) ?? row.totalRent?.toFixed(2) ?? '0.00' }}</span>
@@ -164,6 +170,9 @@
             inactive-text="不使用"
             @change="onUsePointsChange"
           />
+          <el-tooltip v-if="!pointsInfo.pointsCompatible && createForm.useCouponId" effect="dark" content="当前优惠券与积分抵扣互斥，请先取消选择优惠券">
+            <el-tag type="danger" size="small" effect="plain" style="margin-left: 10px">🔒 互斥券已禁用积分</el-tag>
+          </el-tooltip>
         </el-form-item>
         <el-form-item v-if="createForm.usePoints && canUsePoints" label="抵扣积分">
           <div style="width: 100%">
@@ -184,11 +193,74 @@
           </div>
         </el-form-item>
 
+        <el-form-item label="选择优惠券">
+          <div style="width: 100%">
+            <el-select
+              v-model="createForm.useCouponId"
+              placeholder="请选择优惠券（选填）"
+              style="width: 100%"
+              clearable
+              @change="onCouponChange"
+            >
+              <el-option
+                v-for="c in availableCoupons"
+                :key="c.id"
+                :value="c.id"
+              >
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%">
+                  <div>
+                    <el-tag :type="c.type === 'FIXED' ? 'success' : 'warning'" size="small" style="margin-right: 8px">
+                      {{ c.type === 'FIXED' ? '满减' : '折扣' }}
+                    </el-tag>
+                    <span style="font-weight: 600">
+                      <template v-if="c.type === 'FIXED'">
+                        满¥{{ Number(c.minAmount || 0).toFixed(0) }}减¥{{ Number(c.discountValue).toFixed(0) }}
+                      </template>
+                      <template v-else>
+                        {{ Number(c.discountValue) }}折
+                      </template>
+                    </span>
+                    <span style="color: #909399; margin-left: 10px; font-size: 12px">{{ c.couponNo }}</span>
+                  </div>
+                  <div style="text-align: right">
+                    <el-tag v-if="c.pointsCompatible" type="success" size="small" effect="plain">✓ 可组合积分</el-tag>
+                    <el-tag v-else type="danger" size="small" effect="plain">✕ 互斥</el-tag>
+                    <div style="color: #E6A23C; font-size: 12px; margin-top: 2px">
+                      {{ c.validStartDate }}~{{ c.validEndDate }}
+                    </div>
+                  </div>
+                </div>
+              </el-option>
+            </el-select>
+            <div v-if="availableCoupons.length === 0 && createForm.customerId" style="color: #909399; font-size: 12px; margin-top: 6px">
+              <el-icon style="vertical-align: -2px"><InfoFilled /></el-icon>
+              当前客户暂无满足订单金额的可用优惠券
+            </div>
+            <el-alert
+              v-if="pointsInfo.message"
+              :title="pointsInfo.message"
+              type="warning"
+              :closable="false"
+              show-icon
+              style="margin-top: 8px"
+            />
+          </div>
+        </el-form-item>
+
         <el-divider content-position="left">费用明细</el-divider>
         <div class="fee-detail">
           <div class="fee-row">
             <span class="fee-label">总租金</span>
             <span class="fee-value">¥{{ pointsInfo.totalRent?.toFixed(2) || '0.00' }}</span>
+          </div>
+          <div v-if="pointsInfo.couponDeductAmount > 0" class="fee-row">
+            <span class="fee-label">
+              🎟️ 优惠券抵扣
+              <el-tag v-if="selectedCouponInfo" size="small" effect="plain" type="success" style="margin-left: 6px">
+                {{ selectedCouponInfo.type === 'FIXED' ? '满减券' : selectedCouponInfo.discountValue + '折券' }}
+              </el-tag>
+            </span>
+            <span class="fee-value coupon">-¥{{ pointsInfo.couponDeductAmount?.toFixed(2) }}</span>
           </div>
           <div v-if="pointsInfo.deductAmount > 0" class="fee-row">
             <span class="fee-label">积分抵扣（{{ pointsInfo.usePoints }} 积分）</span>
@@ -201,6 +273,12 @@
           <div v-if="pointsInfo.willEarnPoints > 0" class="fee-row earn">
             <span class="fee-label">🎉 本次消费预计获得</span>
             <span class="fee-value"><el-tag type="primary" effect="dark">+{{ pointsInfo.willEarnPoints }} 积分</el-tag></span>
+          </div>
+          <div v-if="pointsInfo.couponDeductAmount > 0 || pointsInfo.deductAmount > 0" class="fee-row">
+            <span class="fee-label" style="color: #67C23A; font-weight: 600">💸 合计已省</span>
+            <span class="fee-value" style="color: #67C23A; font-weight: 700; font-size: 15px">
+              ¥{{ (Number(pointsInfo.couponDeductAmount || 0) + Number(pointsInfo.deductAmount || 0)).toFixed(2) }}
+            </span>
           </div>
         </div>
 
@@ -292,10 +370,12 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getOrderList, createOrder, renewOrder, returnOrder, calculateOrderPoints } from '../api/order.js'
+import { InfoFilled } from '@element-plus/icons-vue'
+import { getOrderList, createOrder, renewOrder, returnOrder, calculateOrderPoints, calculateOrderCoupon } from '../api/order.js'
 import { getAvailableInstruments } from '../api/instrument.js'
 import { getAllCustomers } from '../api/customer.js'
 import { getCustomerPoints, getDefaultConfigs } from '../api/points.js'
+import { getCustomerAvailableCouponsForAmount } from '../api/coupon.js'
 
 const searchParams = reactive({
   keyword: '',
@@ -327,10 +407,13 @@ const createForm = reactive({
   payMethod: '',
   remark: '',
   usePoints: false,
-  usePointsAmount: 0
+  usePointsAmount: 0,
+  useCouponId: null
 })
 
 const currentCustomerPoints = ref(null)
+const availableCoupons = ref([])
+const selectedCouponInfo = ref(null)
 
 const createRules = {
   customerId: [{ required: true, message: '请选择客户', trigger: 'change' }],
@@ -347,12 +430,17 @@ const pointsInfo = reactive({
   usePoints: 0,
   actualPayAmount: 0,
   willEarnPoints: 0,
-  maxDeductAmount: 0
+  maxDeductAmount: 0,
+  couponDeductAmount: 0,
+  selectedCoupon: null,
+  pointsCompatible: true,
+  message: ''
 })
 
 const maxDeductAmount = computed(() => pointsInfo.maxDeductAmount || 0)
 
 const canUsePoints = computed(() => {
+  if (!pointsInfo.pointsCompatible) return false
   return !!(currentCustomerPoints.value && currentCustomerPoints.value > 0
     && createForm.customerId && createForm.instrumentId
     && createForm.dateRange && createForm.dateRange.length === 2)
@@ -486,14 +574,21 @@ const onInstrumentChange = (val) => {
   const inst = instrumentOptions.value.find(i => i.id === val)
   selectedInstrumentDailyRent.value = inst ? inst.dailyRent || 0 : 0
   calculatePointsInfo()
+  loadAvailableCoupons()
 }
 
 const onCustomerChange = async (customerId) => {
   currentCustomerPoints.value = null
+  availableCoupons.value = []
   createForm.usePoints = false
   createForm.usePointsAmount = 0
+  createForm.useCouponId = null
   pointsInfo.usePoints = 0
   pointsInfo.deductAmount = 0
+  pointsInfo.selectedCoupon = null
+  pointsInfo.couponDeductAmount = 0
+  pointsInfo.pointsCompatible = true
+  pointsInfo.message = ''
   if (customerId) {
     try {
       const { data } = await getCustomerPoints(customerId)
@@ -507,6 +602,7 @@ const onCustomerChange = async (customerId) => {
 
 const onDateChange = () => {
   calculatePointsInfo()
+  loadAvailableCoupons()
 }
 
 const onUsePointsChange = (val) => {
@@ -518,6 +614,36 @@ const onUsePointsChange = (val) => {
   calculatePointsInfo()
 }
 
+const onCouponChange = async (val) => {
+  if (val) {
+    const coupon = availableCoupons.value.find(c => c.id === val)
+    selectedCouponInfo.value = coupon
+    if (coupon && !coupon.pointsCompatible) {
+      createForm.usePoints = false
+      createForm.usePointsAmount = 0
+    }
+  } else {
+    selectedCouponInfo.value = null
+  }
+  calculatePointsInfo()
+}
+
+const loadAvailableCoupons = async () => {
+  if (!createForm.customerId || !createForm.instrumentId || !createForm.dateRange || createForm.dateRange.length !== 2) {
+    availableCoupons.value = []
+    return
+  }
+  try {
+    const [start, end] = createForm.dateRange
+    const days = Math.ceil((new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24))
+    const total = Math.max(days, 0) * selectedInstrumentDailyRent.value
+    if (total > 0) {
+      const { data } = await getCustomerAvailableCouponsForAmount(createForm.customerId, total)
+      availableCoupons.value = data || []
+    }
+  } catch {}
+}
+
 const calculatePointsInfo = async () => {
   if (!createForm.customerId || !createForm.instrumentId || !createForm.dateRange || createForm.dateRange.length !== 2) {
     pointsInfo.totalRent = 0
@@ -526,25 +652,34 @@ const calculatePointsInfo = async () => {
     pointsInfo.actualPayAmount = 0
     pointsInfo.willEarnPoints = 0
     pointsInfo.maxDeductAmount = 0
+    pointsInfo.couponDeductAmount = 0
+    pointsInfo.selectedCoupon = null
+    pointsInfo.pointsCompatible = true
+    pointsInfo.message = ''
     return
   }
   try {
     const [startDate, endDate] = createForm.dateRange
     const usePoints = createForm.usePoints ? createForm.usePointsAmount : 0
-    const { data } = await calculateOrderPoints({
+    const { data } = await calculateOrderCoupon({
       customerId: createForm.customerId,
       instrumentId: createForm.instrumentId,
       startDate,
       endDate,
+      couponId: createForm.useCouponId || undefined,
       usePoints: usePoints || undefined
     })
     if (data) {
       pointsInfo.totalRent = Number(data.totalRent) || 0
-      pointsInfo.deductAmount = Number(data.deductAmount) || 0
+      pointsInfo.deductAmount = Number(data.pointsDeductAmount) || 0
       pointsInfo.usePoints = Number(data.usePoints) || 0
       pointsInfo.actualPayAmount = Number(data.actualPayAmount) || pointsInfo.totalRent
       pointsInfo.willEarnPoints = Number(data.willEarnPoints) || 0
       pointsInfo.maxDeductAmount = Number(data.maxDeductAmount) || 0
+      pointsInfo.couponDeductAmount = Number(data.couponDeductAmount) || 0
+      pointsInfo.selectedCoupon = data.selectedCoupon || null
+      pointsInfo.pointsCompatible = data.pointsCompatible !== false
+      pointsInfo.message = data.message || ''
     }
   } catch (e) {
     // fallback to local calculation
@@ -555,7 +690,7 @@ const calculatePointsInfo = async () => {
     const max = total * maxDeductPercent.value / 100
     pointsInfo.maxDeductAmount = max
     let useAmt = 0, usePts = 0
-    if (createForm.usePoints && currentCustomerPoints.value > 0) {
+    if (createForm.usePoints && currentCustomerPoints.value > 0 && pointsInfo.pointsCompatible) {
       const pts = Math.min(createForm.usePointsAmount, currentCustomerPoints.value)
       const tempAmt = pts / deductRate.value
       if (tempAmt > max) {
@@ -568,13 +703,30 @@ const calculatePointsInfo = async () => {
     }
     pointsInfo.usePoints = usePts
     pointsInfo.deductAmount = Number(useAmt.toFixed(2))
-    pointsInfo.actualPayAmount = Number((total - useAmt).toFixed(2))
+    let couponDiscount = 0
+    if (createForm.useCouponId && availableCoupons.value.length > 0) {
+      const c = availableCoupons.value.find(x => x.id === createForm.useCouponId)
+      if (c) {
+        if (c.type === 'FIXED' && total >= (c.minAmount || 0)) {
+          couponDiscount = Number(c.discountValue || 0)
+        } else if (c.type === 'PERCENT' && total >= (c.minAmount || 0)) {
+          const pct = Number(c.discountValue || 10) / 10
+          couponDiscount = total * (1 - pct)
+          if (c.maxDiscountAmount && couponDiscount > Number(c.maxDiscountAmount)) {
+            couponDiscount = Number(c.maxDiscountAmount)
+          }
+        }
+        couponDiscount = Number(couponDiscount.toFixed(2))
+      }
+    }
+    pointsInfo.couponDeductAmount = couponDiscount
+    pointsInfo.actualPayAmount = Number((total - couponDiscount - useAmt).toFixed(2))
     pointsInfo.willEarnPoints = Math.round(total * earnRate.value)
   }
 }
 
-watch([() => createForm.usePoints, () => createForm.usePointsAmount], () => {
-  if (canUsePoints.value) calculatePointsInfo()
+watch([() => createForm.usePoints, () => createForm.usePointsAmount, () => createForm.useCouponId], () => {
+  calculatePointsInfo()
 })
 
 const openCreateDialog = () => {
@@ -592,13 +744,17 @@ const resetCreateForm = () => {
     payMethod: '',
     remark: '',
     usePoints: false,
-    usePointsAmount: 0
+    usePointsAmount: 0,
+    useCouponId: null
   })
   selectedInstrumentDailyRent.value = 0
   currentCustomerPoints.value = null
+  availableCoupons.value = []
+  selectedCouponInfo.value = null
   Object.assign(pointsInfo, {
     totalRent: 0, deductAmount: 0, usePoints: 0,
-    actualPayAmount: 0, willEarnPoints: 0, maxDeductAmount: 0
+    actualPayAmount: 0, willEarnPoints: 0, maxDeductAmount: 0,
+    couponDeductAmount: 0, selectedCoupon: null, pointsCompatible: true, message: ''
   })
 }
 
@@ -615,11 +771,19 @@ const handleCreateSubmit = async () => {
       payMethod: createForm.payMethod,
       remark: createForm.remark,
       usePoints: createForm.usePoints,
-      usePointsAmount: createForm.usePoints ? pointsInfo.usePoints : 0
+      usePointsAmount: createForm.usePoints ? pointsInfo.usePoints : 0,
+      useCouponId: createForm.useCouponId
     })
     let msg = '新建租赁成功'
+    let savings = []
+    if (pointsInfo.couponDeductAmount > 0) {
+      savings.push(`优惠券省 ¥${pointsInfo.couponDeductAmount.toFixed(2)}`)
+    }
     if (pointsInfo.usePoints > 0) {
-      msg += `（已抵扣 ${pointsInfo.usePoints} 积分，省 ¥${pointsInfo.deductAmount.toFixed(2)}）`
+      savings.push(`${pointsInfo.usePoints} 积分省 ¥${pointsInfo.deductAmount.toFixed(2)}`)
+    }
+    if (savings.length > 0) {
+      msg += `（${savings.join('，')}）`
     }
     if (pointsInfo.willEarnPoints > 0) {
       msg += `，归还后将获得 ${pointsInfo.willEarnPoints} 积分`
@@ -778,6 +942,7 @@ onMounted(() => {
 .fee-label { color: #606266; }
 .fee-value { color: #303133; font-weight: 500; }
 .fee-value.deduct { color: #67C23A; font-weight: 600; }
+.fee-value.coupon { color: #E91E63; font-weight: 600; }
 .fee-row.total {
   border-top: 1px dashed #dcdfe6;
   margin-top: 8px;

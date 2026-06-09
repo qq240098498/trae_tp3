@@ -17,6 +17,7 @@ const routes = [
       { path: 'maintenance', name: 'Maintenance', component: () => import('../views/Maintenance.vue'), meta: { title: '维保记录' } },
       { path: 'reminder', name: 'Reminder', component: () => import('../views/Reminder.vue'), meta: { title: '到期提醒' } },
       { path: 'points', name: 'Points', component: () => import('../views/Points.vue'), meta: { title: '会员积分' } },
+      { path: 'coupon', name: 'Coupon', component: () => import('../views/Coupon.vue'), meta: { title: '优惠券管理' } },
     ]
   }
 ]
