@@ -40,6 +40,10 @@ CREATE TABLE IF NOT EXISTS rental_order (
     daily_rent DECIMAL(10,2) NOT NULL COMMENT '日租金',
     total_rent DECIMAL(10,2) NOT NULL COMMENT '总租金',
     deposit_amount DECIMAL(10,2) NOT NULL COMMENT '押金金额',
+    points_deduct_amount DECIMAL(10,2) DEFAULT 0 COMMENT '积分抵扣金额',
+    used_points INT DEFAULT 0 COMMENT '使用积分数',
+    actual_pay_amount DECIMAL(10,2) DEFAULT 0 COMMENT '实际支付金额',
+    earned_points INT DEFAULT 0 COMMENT '获得积分数',
     status VARCHAR(20) DEFAULT 'ACTIVE' COMMENT '状态(ACTIVE/RETURNED/OVERDUE/CANCELLED)',
     actual_return_date DATE COMMENT '实际归还日期',
     overdue_fee DECIMAL(10,2) DEFAULT 0 COMMENT '逾期费用',
@@ -132,11 +136,6 @@ CREATE TABLE IF NOT EXISTS repair_order (
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted INT DEFAULT 0
 ) COMMENT '维修工单表';
-
-ALTER TABLE rental_order ADD COLUMN IF NOT EXISTS points_deduct_amount DECIMAL(10,2) DEFAULT 0 COMMENT '积分抵扣金额';
-ALTER TABLE rental_order ADD COLUMN IF NOT EXISTS used_points INT DEFAULT 0 COMMENT '使用积分数';
-ALTER TABLE rental_order ADD COLUMN IF NOT EXISTS actual_pay_amount DECIMAL(10,2) DEFAULT 0 COMMENT '实际支付金额';
-ALTER TABLE rental_order ADD COLUMN IF NOT EXISTS earned_points INT DEFAULT 0 COMMENT '获得积分数';
 
 CREATE TABLE IF NOT EXISTS points_config (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,

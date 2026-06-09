@@ -320,7 +320,7 @@ const calculateSummary = () => {
   summary.totalDeducted = deducted.toFixed(2)
 }
 
-const getAvailableDeposit = async (orderId) => {
+const fetchAvailableDeposit = async (orderId) => {
   try {
     const { data } = await getAvailableDeposit(orderId)
     return Number(data) || 0
@@ -416,7 +416,7 @@ const resetRefundForm = () => {
 }
 
 const onRefundOrderChange = async (val) => {
-  refundForm.availableAmount = await getAvailableDeposit(val)
+  refundForm.availableAmount = await fetchAvailableDeposit(val)
   refundForm.amount = refundForm.availableAmount
 }
 
@@ -454,7 +454,7 @@ const resetDeductForm = () => {
 }
 
 const onDeductOrderChange = async (val) => {
-  deductForm.availableAmount = await getAvailableDeposit(val)
+  deductForm.availableAmount = await fetchAvailableDeposit(val)
 }
 
 const handleDeductSubmit = async () => {
