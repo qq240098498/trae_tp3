@@ -5,87 +5,90 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.instrument.rental.entity.DepositRecord;
 import com.instrument.rental.mapper.DepositRecordMapper;
 import com.instrument.rental.service.DepositRecordService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.List;
 
 @Service
 public class DepositRecordServiceImpl extends ServiceImpl<DepositRecordMapper, DepositRecord> implements DepositRecordService {
 
-    private final ConcurrentHashMap<Long, ReentrantLock> orderLocks = new ConcurrentHashMap<>();
+    private static final int MAX_RETRIES = 3;
 
-    private ReentrantLock getLock(Long orderId) {
-        return orderLocks.computeIfAbsent(orderId, k -> new ReentrantLock());
-    }
+    @Autowired
+    private DepositRecordMapper depositRecordMapper;
 
     @Override
     @Transactional
     public DepositRecord collectDeposit(Long orderId, BigDecimal amount, String payMethod, String remark) {
-        ReentrantLock lock = getLock(orderId);
-        lock.lock();
-        try {
-            DepositRecord record = new DepositRecord();
-            record.setOrderId(orderId);
-            record.setType("COLLECT");
-            record.setAmount(amount);
-            record.setPayMethod(payMethod);
-            record.setStatus("PAID");
-            record.setRemark(remark);
-            this.save(record);
-            return record;
-        } finally {
-            lock.unlock();
-        }
+        DepositRecord record = new DepositRecord();
+        record.setOrderId(orderId);
+        record.setType("COLLECT");
+        record.setAmount(amount);
+        record.setPayMethod(payMethod);
+        record.setStatus("PAID");
+        record.setRemark(remark);
+        this.save(record);
+        return record;
     }
 
     @Override
     @Transactional
     public DepositRecord refundDeposit(Long orderId, BigDecimal amount, String payMethod, String remark) {
-        ReentrantLock lock = getLock(orderId);
-        lock.lock();
-        try {
-            BigDecimal available = getAvailableDeposit(orderId);
-            if (available.compareTo(amount) < 0) {
-                throw new RuntimeException("退还金额超过可退余额，可退余额：" + available.toPlainString());
+        RuntimeException lastEx = null;
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                int rows = depositRecordMapper.insertRefundWithBalanceCheck(orderId, amount, payMethod, remark);
+                if (rows > 0) {
+                    DepositRecord record = new DepositRecord();
+                    record.setOrderId(orderId);
+                    record.setType("REFUND");
+                    record.setAmount(amount);
+                    record.setPayMethod(payMethod);
+                    record.setStatus("PAID");
+                    record.setRemark(remark);
+                    return record;
+                }
+                BigDecimal available = getAvailableDeposit(orderId);
+                lastEx = new RuntimeException("退还金额超过可退余额，可退余额：" + available.toPlainString());
+            } catch (Exception e) {
+                lastEx = e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e.getMessage(), e);
             }
-            DepositRecord record = new DepositRecord();
-            record.setOrderId(orderId);
-            record.setType("REFUND");
-            record.setAmount(amount);
-            record.setPayMethod(payMethod);
-            record.setStatus("PAID");
-            record.setRemark(remark);
-            this.save(record);
-            return record;
-        } finally {
-            lock.unlock();
+            if (attempt < MAX_RETRIES) {
+                sleep(50L * attempt);
+            }
         }
+        throw lastEx != null ? lastEx : new RuntimeException("押金退还失败，请稍后重试");
     }
 
     @Override
     @Transactional
     public DepositRecord deductDeposit(Long orderId, BigDecimal amount, String remark) {
-        ReentrantLock lock = getLock(orderId);
-        lock.lock();
-        try {
-            BigDecimal available = getAvailableDeposit(orderId);
-            if (available.compareTo(amount) < 0) {
-                throw new RuntimeException("扣除金额超过可扣余额，可扣余额：" + available.toPlainString());
+        RuntimeException lastEx = null;
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                int rows = depositRecordMapper.insertDeductWithBalanceCheck(orderId, amount, remark);
+                if (rows > 0) {
+                    DepositRecord record = new DepositRecord();
+                    record.setOrderId(orderId);
+                    record.setType("DEDUCT");
+                    record.setAmount(amount);
+                    record.setStatus("PAID");
+                    record.setRemark(remark);
+                    return record;
+                }
+                BigDecimal available = getAvailableDeposit(orderId);
+                lastEx = new RuntimeException("扣除金额超过可扣余额，可扣余额：" + available.toPlainString());
+            } catch (Exception e) {
+                lastEx = e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e.getMessage(), e);
             }
-            DepositRecord record = new DepositRecord();
-            record.setOrderId(orderId);
-            record.setType("DEDUCT");
-            record.setAmount(amount);
-            record.setStatus("PAID");
-            record.setRemark(remark);
-            this.save(record);
-            return record;
-        } finally {
-            lock.unlock();
+            if (attempt < MAX_RETRIES) {
+                sleep(50L * attempt);
+            }
         }
+        throw lastEx != null ? lastEx : new RuntimeException("押金扣除失败，请稍后重试");
     }
 
     @Override
@@ -93,7 +96,7 @@ public class DepositRecordServiceImpl extends ServiceImpl<DepositRecordMapper, D
         LambdaQueryWrapper<DepositRecord> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(DepositRecord::getOrderId, orderId);
         wrapper.in(DepositRecord::getStatus, "PAID", "COMPLETED");
-        java.util.List<DepositRecord> records = this.list(wrapper);
+        List<DepositRecord> records = this.list(wrapper);
 
         BigDecimal collected = BigDecimal.ZERO;
         BigDecimal refunded = BigDecimal.ZERO;
@@ -107,5 +110,13 @@ public class DepositRecordServiceImpl extends ServiceImpl<DepositRecordMapper, D
             }
         }
         return collected.subtract(refunded).subtract(deducted);
+    }
+
+    private static void sleep(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
     }
 }
